@@ -1,0 +1,30 @@
+# Binaries and build
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+bin/
+build/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS specific
+.DS_Store
+Thumbs.db
+
+# Go specific
+*.test
+/vendor/
+go.work
+
+# Environment and secrets
+.env
+
+# Test coverage
+*.out
+coverage.html
