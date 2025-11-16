@@ -4,9 +4,9 @@ import (
 	"context"
 	"os"
 
-	"github.com/diagnosis/interactive-todo/internal/logger"
-	store "github.com/diagnosis/interactive-todo/internal/store/database"
-	"github.com/diagnosis/interactive-todo/migrations"
+	"github.com/diagnosis/interactive-todo/app/internal/logger"
+	"github.com/diagnosis/interactive-todo/app/internal/store/database"
+	"github.com/diagnosis/interactive-todo/app/migrations"
 	_ "github.com/joho/godotenv/autoload"
 )
 
