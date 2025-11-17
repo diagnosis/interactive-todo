@@ -48,10 +48,14 @@ func Migrate(dsn, dir string) error {
 		return err
 	}
 	defer db.Close()
+
+	db.SetMaxOpenConns(1)
+	db.SetMaxIdleConns(1)
+	db.SetConnMaxLifetime(0)
 	if err = goose.SetDialect("postgres"); err != nil {
 		return err
 	}
-	if err = goose.Up(db, dir); err != nil {
+	if err = goose.Up(db, "."); err != nil {
 		return fmt.Errorf("goose up:%w", err)
 	}
 	return nil

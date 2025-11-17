@@ -13,6 +13,7 @@ import (
 	"github.com/diagnosis/interactive-todo/internal/logger"
 	middleware "github.com/diagnosis/interactive-todo/internal/middleware/auth"
 	store "github.com/diagnosis/interactive-todo/internal/store/tasks"
+	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 )
 
@@ -80,8 +81,234 @@ func (h *TaskHandler) ListTasksAsReporter(w http.ResponseWriter, r *http.Request
 func (h *TaskHandler) ListTaskAsAssignee(w http.ResponseWriter, r *http.Request) {
 	h.listTasks(w, r, false)
 }
-func GetTask(w http.ResponseWriter, r *http.Request) {
+func (h *TaskHandler) GetTask(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	defer cancel()
 
+	userID, ok := middleware.GetUserIDFromContext(ctx)
+	if !ok {
+		helper.RespondError(w, r, apperror.Unauthorized("unauthorized"))
+		return
+	}
+
+	id, err := parseTaskID(r)
+	if err != nil {
+		helper.RespondError(w, r, apperror.Unauthorized("bad id"))
+		return
+	}
+	task, err := h.getTaskByID(ctx, id)
+	if err != nil {
+		if errors.Is(err, store.ErrTaskNotFound) {
+			logger.Error(ctx, "no task", "err", err)
+			helper.RespondError(w, r, apperror.NotFound("no task found"))
+			return
+		}
+		logger.Error(ctx, "internal error", "err", err)
+		helper.RespondError(w, r, apperror.InternalError("internal error", err))
+		return
+	}
+	if task.ReporterID != userID && task.AssigneeID != userID {
+		logger.Error(ctx, "forbidden")
+		helper.RespondError(w, r, apperror.Forbidden("forbidden"))
+		return
+	}
+
+	response := map[string]any{
+		"userID": userID,
+		"task":   task,
+	}
+	helper.RespondJSON(w, r, http.StatusOK, response)
+}
+
+func (h *TaskHandler) AssignTask(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	defer cancel()
+
+	userID, ok := middleware.GetUserIDFromContext(ctx)
+	if !ok {
+		helper.RespondError(w, r, apperror.Unauthorized("unauthorized"))
+		return
+	}
+	var in struct {
+		AssigneeID uuid.UUID `json:"assignee_id"`
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
+	dec := json.NewDecoder(r.Body)
+	dec.DisallowUnknownFields()
+
+	err := dec.Decode(&in)
+	if err != nil {
+		logger.Error(ctx, "bad json")
+		helper.RespondError(w, r, apperror.BadRequest("bad request"))
+		return
+	}
+	if in.AssigneeID == uuid.Nil {
+		helper.RespondError(w, r, apperror.BadRequest("assignee id needed"))
+		return
+	}
+
+	id, err := parseTaskID(r)
+	if err != nil {
+		helper.RespondError(w, r, apperror.Unauthorized("bad id"))
+		return
+	}
+	task, err := h.getTaskByID(ctx, id)
+	if err != nil {
+		if errors.Is(err, store.ErrTaskNotFound) {
+			logger.Error(ctx, "no task", "err", err)
+			helper.RespondError(w, r, apperror.NotFound("no task found"))
+			return
+		}
+		logger.Error(ctx, "internal error", "err", err)
+		helper.RespondError(w, r, apperror.InternalError("internal error", err))
+		return
+	}
+	if userID != task.ReporterID {
+		logger.Error(ctx, "only task creator can assign task")
+		helper.RespondError(w, r, apperror.Forbidden("only task creator can assign task"))
+		return
+	}
+	task, err = h.taskStore.Assign(ctx, task.ID, in.AssigneeID, time.Now().UTC())
+	if err != nil {
+		logger.Error(ctx, "internal", "err", err)
+		helper.RespondError(w, r, apperror.InternalError("internal error", err))
+		return
+	}
+	logger.Info(ctx, "task assigned", "assignee_id", task.AssigneeID)
+	helper.RespondJSON(w, r, http.StatusOK, task)
+
+}
+func (h *TaskHandler) UpdateStatus(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	defer cancel()
+	//check authentication
+	userID, ok := middleware.GetUserIDFromContext(ctx)
+	if !ok {
+		helper.RespondError(w, r, apperror.Unauthorized("unauthorized"))
+		return
+	}
+	//parse taskIDid
+	taskID, err := parseTaskID(r)
+	if err != nil {
+		logger.Error(ctx, "failed to parse id", "err", err)
+		helper.RespondError(w, r, apperror.BadRequest("bad task id"))
+		return
+	}
+	//get body
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
+	dec := json.NewDecoder(r.Body)
+	dec.DisallowUnknownFields()
+	var in struct {
+		Status store.TaskStatus `json:"status"`
+	}
+	if err = dec.Decode(&in); err != nil {
+		logger.Error(ctx, "bad json", "err", err)
+		helper.RespondError(w, r, apperror.BadRequest("bad request body"))
+		return
+	}
+	defer r.Body.Close()
+	//status check
+	if !isValidStatus(in.Status) {
+		helper.RespondError(w, r, apperror.BadRequest("task status invalid"))
+		return
+	}
+
+	//get task
+
+	task, err := h.getTaskByID(ctx, taskID)
+	if err != nil {
+		if errors.Is(err, store.ErrTaskNotFound) {
+			logger.Error(ctx, "no task", "err", err)
+			helper.RespondError(w, r, apperror.NotFound("no task found"))
+			return
+		}
+		logger.Error(ctx, "internal error", "err", err)
+		helper.RespondError(w, r, apperror.InternalError("internal error", err))
+		return
+	}
+
+	//check if assignee is trying to update
+	if userID != task.AssigneeID {
+		logger.Error(ctx, "forbidden: only assignee can update status")
+		helper.RespondError(w, r, apperror.Forbidden("only assignee can update task status"))
+		return
+	}
+	updatedTask, err := h.taskStore.UpdateStatus(ctx, taskID, in.Status, time.Now().UTC())
+	if err != nil {
+		logger.Error(ctx, "unable to update status", "err", err)
+		helper.RespondError(w, r, apperror.InternalError("internal error", err))
+		return
+	}
+	logger.Info(ctx, "task status updated", "taskID", taskID, "status", in.Status)
+	helper.RespondJSON(w, r, http.StatusOK, updatedTask)
+}
+
+func (h *TaskHandler) DeleteTask(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	defer cancel()
+
+	userID, ok := middleware.GetUserIDFromContext(ctx)
+	if !ok {
+		helper.RespondError(w, r, apperror.Unauthorized("authentication required"))
+		return
+	}
+	// Get task ID
+	taskID, err := parseTaskID(r)
+	if err != nil {
+		helper.RespondError(w, r, apperror.BadRequest("invalid task id"))
+		return
+	}
+
+	task, err := h.getTaskByID(ctx, taskID)
+	if err != nil {
+		if errors.Is(err, store.ErrTaskNotFound) {
+			helper.RespondError(w, r, apperror.NotFound("task not found"))
+			return
+		}
+		logger.Error(ctx, "failed to get task", "err", err)
+		helper.RespondError(w, r, apperror.InternalError("internal error", err))
+		return
+	}
+
+	// Only creator (reporter) can delete
+	if userID != task.ReporterID {
+		logger.Info(ctx, "forbidden: only task creator can delete")
+		helper.RespondError(w, r, apperror.Forbidden("only task creator can delete"))
+		return
+	}
+	// delete now
+	if err = h.taskStore.DeleteTask(ctx, taskID); err != nil {
+		if errors.Is(err, store.ErrTaskNotFound) {
+			helper.RespondError(w, r, apperror.NotFound("task not found"))
+			return
+		}
+		logger.Error(ctx, "internal error", "err", err)
+		helper.RespondError(w, r, apperror.InternalError("internal error", err))
+		return
+	}
+
+	logger.Info(ctx, "task deleted", "taskID", taskID)
+	w.WriteHeader(http.StatusNoContent) // Just this!
+
+}
+
+func parseTaskID(r *http.Request) (uuid.UUID, error) {
+	idstr := chi.URLParam(r, "id")
+	id, err := uuid.Parse(idstr)
+	if err != nil {
+		return uuid.Nil, err
+	}
+	return id, nil
+}
+func (h *TaskHandler) getTaskByID(ctx context.Context, id uuid.UUID) (*store.Task, error) {
+	task, err := h.taskStore.GetTaskByID(ctx, id)
+	if err != nil {
+		if errors.Is(err, store.ErrTaskNotFound) {
+			return nil, store.ErrTaskNotFound
+		}
+		return nil, err
+	}
+	return task, nil
 }
 
 // inner handler
@@ -104,7 +331,7 @@ func (h *TaskHandler) listTasks(w http.ResponseWriter, r *http.Request, isReport
 	}
 
 	if err != nil {
-		if errors.Is(err, store.ErrNotFound) {
+		if errors.Is(err, store.ErrTaskNotFound) {
 			helper.RespondError(w, r, apperror.NotFound(err.Error()))
 			return
 		}
@@ -130,4 +357,12 @@ func taskInputValidation(in input) error {
 		return errors.New("due at must be at least 8 hours from now")
 	}
 	return nil
+}
+func isValidStatus(status store.TaskStatus) bool {
+	switch status {
+	case store.OpenStatus, store.InProgressStatus, store.DoneStatus, store.CanceledStatus:
+		return true
+	default:
+		return false
+	}
 }

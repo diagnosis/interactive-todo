@@ -23,7 +23,7 @@ Thumbs.db
 go.work
 
 # Environment and secrets
-.env
+backend/.env
 
 # Test coverage
 *.out

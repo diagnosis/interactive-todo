@@ -22,7 +22,7 @@ const (
 )
 
 var (
-	ErrNotFound      = errors.New("task not found")
+	ErrTaskNotFound  = errors.New("task not found")
 	ErrInvalidStatus = errors.New("invalid task status")
 	ErrInvalidInput  = errors.New("invalid input")
 )
@@ -69,6 +69,7 @@ type TaskStore interface {
 	GetTasksByAssigneeID(ctx context.Context, assigneeID uuid.UUID) ([]Task, error)
 	GetTasksByReporterID(ctx context.Context, reporterID uuid.UUID) ([]Task, error)
 	GetAllTasks(ctx context.Context) ([]Task, error)
+	DeleteTask(ctx context.Context, id uuid.UUID) error
 
 	// FindDueForReminder finds tasks that need reminders
 	// Tasks are selected if they're due between now and 'before' time
@@ -206,7 +207,7 @@ func (s *PGTaskStore) Assign(
 		&o.UpdatedAt,
 	); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, ErrNotFound
+			return nil, ErrTaskNotFound
 		}
 		return nil, fmt.Errorf("assign task: %w", err)
 	}
@@ -251,7 +252,7 @@ func (s *PGTaskStore) UpdateStatus(
 		&o.UpdatedAt,
 	); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, ErrNotFound
+			return nil, ErrTaskNotFound
 		}
 		return nil, fmt.Errorf("update task status: %w", err)
 	}
@@ -280,7 +281,7 @@ func (s *PGTaskStore) GetTaskByID(ctx context.Context, id uuid.UUID) (*Task, err
 		&o.UpdatedAt,
 	); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, ErrNotFound
+			return nil, ErrTaskNotFound
 		}
 		return nil, fmt.Errorf("get task by id: %w", err)
 	}
@@ -403,7 +404,19 @@ func (s *PGTaskStore) MarkReminderSent(
 		return fmt.Errorf("mark reminder sent: %w", err)
 	}
 	if res.RowsAffected() == 0 {
-		return ErrNotFound
+		return ErrTaskNotFound
+	}
+	return nil
+}
+
+func (s *PGTaskStore) DeleteTask(ctx context.Context, id uuid.UUID) error {
+	q := `DELETE FROM tasks WHERE id  = $1; `
+	ct, err := s.pool.Exec(ctx, q, id)
+	if err != nil {
+		return err
+	}
+	if ct.RowsAffected() == 0 {
+		return ErrTaskNotFound
 	}
 	return nil
 }

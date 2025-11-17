@@ -187,7 +187,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	response := map[string]any{
 		"access_token": accessToken,
 		"token_type":   "Bearer",
-		"expires_in":   int(15 * time.Minute),
+		"expires_in":   int((15 * time.Minute).Seconds()),
 		"user": map[string]any{
 			"id":    user.ID,
 			"email": user.Email,
@@ -249,7 +249,7 @@ func (h *AuthHandler) RefreshAccessToken(w http.ResponseWriter, r *http.Request)
 	response := map[string]any{
 		"access_token": accessToken,
 		"token_type":   "Bearer",
-		"expires_in":   int(15 * time.Minute),
+		"expires_in":   int((15 * time.Minute).Seconds()),
 		"user": map[string]any{
 			"id":    user.ID,
 			"email": user.Email,
