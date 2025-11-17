@@ -94,10 +94,10 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	}
 	logger.Info(ctx, "user created", "userID", created.ID, "email", created.Email, "userType", created.UserType)
 	response := map[string]any{
-		"userID":    created.ID,
-		"email":     created.Email,
-		"userType":  created.UserType,
-		"createdAt": created.CreatedAt,
+		"user_id":    created.ID,
+		"email":      created.Email,
+		"user_type":  created.UserType,
+		"created_at": created.CreatedAt,
 	}
 	helper.RespondJSON(w, r, http.StatusCreated, response)
 }
