@@ -15,6 +15,7 @@ type ViewMode = 'reporter' | 'assignee'
 function DashboardPage() {
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
     const [viewMode, setViewMode] = useState<ViewMode>('reporter')
+    const [reassigningTask, setReassigningTask] = useState<Task | null>(null)
     const [editingTask, setEditingTask] = useState<Task | null>(null)
     const [updatingStatusTask, setUpdatingStatusTask] = useState<Task | null>(null)
     const queryClient = useQueryClient()
@@ -160,6 +161,12 @@ function DashboardPage() {
                                                         onClick={() => setEditingTask(task)}
                                                         className="px-3 py-1 text-sm text-blue-600 hover:bg-blue-50 rounded"
                                                     >
+                                                        Edit
+                                                    </button>
+                                                    <button
+                                                        onClick={() => setReassigningTask(task)}
+                                                        className="px-3 py-1 text-sm text-green-600 hover:bg-green-50 rounded"
+                                                    >
                                                         Reassign
                                                     </button>
                                                     <button
@@ -197,18 +204,36 @@ function DashboardPage() {
                 <TaskForm onSuccess={() => setIsCreateModalOpen(false)} />
             </Modal>
 
-            {/* Edit Task Modal (Reassign) */}
+            {/* Edit Task Modal */}
             <Modal
                 isOpen={!!editingTask}
                 onClose={() => setEditingTask(null)}
-                title="Reassign Task"
+                title="Edit Task"
             >
                 {editingTask && (
                     <TaskForm
                         task={editingTask}
-                        mode="reassign"
+                        mode="edit"
                         onSuccess={() => {
                             setEditingTask(null)
+                            queryClient.invalidateQueries({ queryKey: ['tasks'] })
+                        }}
+                    />
+                )}
+            </Modal>
+
+            {/* Reassign Task Modal */}
+            <Modal
+                isOpen={!!reassigningTask}
+                onClose={() => setReassigningTask(null)}
+                title="Reassign Task"
+            >
+                {reassigningTask && (
+                    <TaskForm
+                        task={reassigningTask}
+                        mode="reassign"
+                        onSuccess={() => {
+                            setReassigningTask(null)
                             queryClient.invalidateQueries({ queryKey: ['tasks'] })
                         }}
                     />
