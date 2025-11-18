@@ -311,6 +311,27 @@ func (h *AuthHandler) LogoutFromAllDevices(w http.ResponseWriter, r *http.Reques
 	helper.RespondMessage(w, r, http.StatusOK, "logged out from all devices successfully")
 }
 
+func (h *AuthHandler) ListUsers(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	defer cancel()
+
+	users, err := h.userStore.ListAll(ctx)
+	if err != nil {
+		logger.Error(ctx, "failed to list users", "err", err)
+		helper.RespondError(w, r, apperror.InternalError("internal error", err))
+		return
+	}
+	response := make([]map[string]any, len(users))
+	for i, user := range users {
+		response[i] = map[string]any{
+			"id":        user.ID,
+			"email":     user.Email,
+			"user_type": user.UserType,
+		}
+	}
+	helper.RespondJSON(w, r, http.StatusOK, response)
+}
+
 func (h *AuthHandler) CleanupExpiredTokens() {
 	ctx := context.Background()
 

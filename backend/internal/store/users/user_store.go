@@ -33,6 +33,7 @@ type UserStore interface {
 	GetUserByID(ctx context.Context, id uuid.UUID) (*User, error)
 	GetUserByEmail(ctx context.Context, email string) (*User, error)
 	UpdatePassword(ctx context.Context, id uuid.UUID, newPassword string, now time.Time) error
+	ListAll(ctx context.Context) ([]User, error)
 }
 type PGUserStore struct {
 	Pool *pgxpool.Pool
@@ -106,6 +107,33 @@ func (s *PGUserStore) UpdatePassword(ctx context.Context, id uuid.UUID, newHashe
 		return ErrNotFound
 	}
 	return nil
+}
+func (s *PGUserStore) ListAll(ctx context.Context) ([]User, error) {
+	q := `SELECT id, email, password_hash, user_type, created_at, updated_at
+			FROM users ORDER BY email`
+	rows, err := s.Pool.Query(ctx, q)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var users []User
+
+	for rows.Next() {
+		var user User
+		err = rows.Scan(
+			&user.ID,
+			&user.Email,
+			&user.PasswordHash,
+			&user.UserType,
+			&user.CreatedAt,
+			&user.UpdatedAt,
+		)
+		if err != nil {
+			return nil, err
+		}
+		users = append(users, user)
+	}
+	return users, rows.Err()
 }
 
 var _ UserStore = (*PGUserStore)(nil)

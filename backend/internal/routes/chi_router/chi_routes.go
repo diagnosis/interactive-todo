@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/diagnosis/interactive-todo/internal/app"
+	middleware "github.com/diagnosis/interactive-todo/internal/middleware/cors"
 	"github.com/go-chi/chi/v5"
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
 )
@@ -18,6 +19,7 @@ func SetupRouter(application *app.Application) *chi.Mux {
 	r.Use(chimiddleware.Logger)
 	r.Use(chimiddleware.Recoverer)
 	r.Use(chimiddleware.Timeout(60 * time.Second))
+	r.Use(middleware.CorsHandler())
 
 	// Health check
 	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
@@ -38,6 +40,11 @@ func SetupRouter(application *app.Application) *chi.Mux {
 			par.Post("/logout-all", application.AuthHandler.LogoutFromAllDevices)
 		})
 	}) // ✅ Close auth routes HERE!
+
+	r.Route("/users", func(ur chi.Router) {
+		ur.Use(application.AuthMiddleware.RequireAuth)
+		ur.Get("/", application.AuthHandler.ListUsers)
+	})
 
 	// ✅ Task routes (OUTSIDE auth, at root level)
 	r.Route("/tasks", func(tr chi.Router) {
