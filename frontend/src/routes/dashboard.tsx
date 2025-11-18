@@ -127,7 +127,7 @@ function DashboardPage() {
                                     : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                             }`}
                         >
-                            Created by Me ({reporterData?.tasks.length || 0})
+                            Created by Me ({reporterData?.tasks?.length || 0})
                         </button>
                         <button
                             onClick={() => setViewMode('assignee')}
@@ -137,14 +137,14 @@ function DashboardPage() {
                                     : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                             }`}
                         >
-                            Assigned to Me ({assigneeData?.tasks.length || 0})
+                            Assigned to Me ({assigneeData?.tasks?.length || 0})
                         </button>
                     </nav>
                 </div>
 
                 {/* Task List */}
                 <div className="bg-white rounded-lg shadow">
-                    {data?.tasks.length === 0 ? (
+                    {!data?.tasks || data.tasks.length === 0 ? (
                         <div className="p-8 text-center text-gray-500">
                             {viewMode === 'reporter'
                                 ? 'No tasks created yet. Create your first task!'
@@ -152,7 +152,7 @@ function DashboardPage() {
                         </div>
                     ) : (
                         <div className="divide-y">
-                            {data?.tasks.map((task) => (
+                            {data.tasks.map((task) => (
                                 <div key={task.id} className="p-4 hover:bg-gray-50">
                                     <div className="flex items-center justify-between">
                                         <div className="flex-1">
