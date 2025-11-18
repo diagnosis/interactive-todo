@@ -68,6 +68,7 @@ func (m *JWTManager) MintAccessToken(userID uuid.UUID, email string, userType st
 func (m *JWTManager) MintRefreshToken(userID uuid.UUID) (string, error) {
 	now := time.Now().UTC()
 	reqClaims := jwt.RegisteredClaims{
+		ID:       uuid.New().String(),
 		Issuer:   m.config.Issuer,
 		Audience: []string{"interactive todo frontend"},
 		Subject:  userID.String(),

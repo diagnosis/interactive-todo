@@ -178,6 +178,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	//get ip
 	ip := getClientIP(r)
 
+	_ = h.refreshStore.RevokeAllForUser(ctx, user.ID, time.Now().UTC())
 	if _, err = h.refreshStore.Create(ctx, user.ID, tokenHash, time.Now().UTC().Add(7*24*time.Hour), ua, net.ParseIP(ip)); err != nil {
 		logger.Error(ctx, "error inserting refresh token", "err", err)
 		helper.RespondError(w, r, apperror.InternalError("internal error", err))

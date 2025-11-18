@@ -46,7 +46,12 @@ export class ApiWrapper {
 
     private async handleResponse<T>(response: APIResponse): Promise<ApiResponse<T>> {
         const status = response.status();
+        if (status === 204) {
+            return { status, data: undefined as any };
+        }
         const json = await response.json();
+
+
 
         if (!response.ok()) {
             return { status, error: json.error || json };

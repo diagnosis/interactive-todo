@@ -31,6 +31,10 @@ export interface RegisterResponse {
 
 export type TaskStatus = "open" | "in_progress" | "done" | "canceled";
 
+export interface TaskListResponse {
+    userId: string;
+    tasks: TaskResponse[];
+}
 export interface TaskResponse {
     id: string;
     title: string;

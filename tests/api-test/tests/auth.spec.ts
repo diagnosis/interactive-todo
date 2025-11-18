@@ -1,6 +1,9 @@
 import {test} from "../src/fixtures/clients";
 import {expect} from "@playwright/test";
 import {ErrorResponse, LoginResponse, RegisterResponse} from "../src/utils/types";
+import {loginTestUser, TEST_USERS} from "./testUsers";
+import {describe} from "node:test";
+import {AuthClient} from "../src/clients/authClient";
 
 
 const uniqueEmail = (prefix:string)=> `${prefix}-${Date.now()}@example.com`
@@ -65,7 +68,103 @@ test.describe("Authentication - Validation Errors", () => {
         expect(wrongPassword.status).toBe(401)
         validateError(wrongPassword.error, "INVALID_CREDENTIALS","Invalid email or password")
     });
+
 });
+describe("Token refresh", ()=> {
+    test("can refresh with valid refresh token", async({ authClient})=>{
+        await authClient.login(TEST_USERS.reporter.email,
+            TEST_USERS.reporter.password)
+
+        const result = await authClient.refresh()
+
+        expect(result.status).toBe(200);
+        expect(result.data.access_token).toBeTruthy();
+        expect(result.data.expires_in).toBe(900);
+    })
+
+    test("refresh fails without cookie", async ({request}) => {
+        const authClient = new AuthClient(request)
+        const result = await authClient.refresh()
+        expect(result.status).toBe(401)
+    })
+
+    test("refresh fails after logout", async ({authClient})=> {
+        await authClient.login(TEST_USERS.reporter.email, TEST_USERS.reporter.password)
+
+        await authClient.logout()
+
+        const result = await authClient.refresh()
+
+        expect(result.status).toBe(401)
+    })
+
+    test("new access token is different from old one", async ({authClient})=>{
+
+        const loginResult = await authClient.login(
+            TEST_USERS.reporter.email,
+            TEST_USERS.reporter.password
+        )
+        const oldToken = loginResult.data.access_token
+
+        await new Promise(resolve => setTimeout(resolve, 1000));
+
+        const refreshResult = await authClient.refresh();
+        const newToken = refreshResult.data.access_token;
+
+        expect(newToken).toBeTruthy();
+        expect(newToken).not.toBe(oldToken);
+
+
+    })
+})
+
+
+
+
+
+test.describe("Logout", () => {
+
+    test("logout returns 200", async ({ authClient }) => {
+        const user = await loginTestUser(authClient, 'reporter');
+        const result = await authClient.logout();
+        expect(result.status).toBe(200);
+    });
+
+    test("logout all devices revokes all tokens", async ({ authClient }) => {
+        const loginResult = await authClient.login(
+            TEST_USERS.reporter.email,
+            TEST_USERS.reporter.password
+        );
+        const token = loginResult.data.access_token;
+
+
+        const result = await authClient.logoutAll(token);
+
+        expect(result.status).toBe(200);
+
+        const refreshResult = await authClient.refresh();
+        expect(refreshResult.status).toBe(401);
+    });
+    test("cannot refresh after logout", async ({ authClient }) => {
+        // Login
+        await authClient.login(
+            TEST_USERS.reporter.email,
+            TEST_USERS.reporter.password
+        );
+
+        // Logout
+        await authClient.logout();
+
+
+        const refreshResult = await authClient.refresh();
+
+        expect(refreshResult.status).toBe(401);
+    });
+});
+
+
+
+
 
 function validateRegisterData(result:RegisterResponse){
     expect(result.email).toBeTruthy()

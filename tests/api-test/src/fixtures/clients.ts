@@ -1,20 +1,22 @@
 import { test as base } from '@playwright/test';
-import {AuthClient} from "../clients/authClient";
-import {TaskClient} from "../clients/taskClient";
+import { AuthClient } from "../clients/authClient";
+import { TaskClient } from "../clients/taskClient";
 
 type Fixtures = {
     authClient: AuthClient,
     taskClient: TaskClient,
 }
 
+console.log("🔷 FIXTURE FILE LOADED");  // ← Add this
+
 export const test = base.extend<Fixtures>({
     authClient: async ({ request }, use) => {
-        await use(new AuthClient(request))
+        await use(new AuthClient(request));
     },
 
-    taskClient: async({ request }, use) =>{
-        await use(new TaskClient(request))
+    taskClient: async ({ request }, use) => {
+        await use(new TaskClient(request));
     },
-})
+});
 
-export { expect } from '@playwright/test'
+export { expect } from '@playwright/test';

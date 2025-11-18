@@ -1,6 +1,6 @@
 import { ApiWrapper } from "../utils/apiWrapper";
 import { APIRequestContext } from "@playwright/test";
-import {ApiResponse, CreateTaskData, TaskResponse, TaskStatus} from "../utils/types";
+import {ApiResponse, CreateTaskData, TaskListResponse, TaskResponse, TaskStatus} from "../utils/types";
 
 export class TaskClient {
     private api: ApiWrapper;
@@ -24,15 +24,15 @@ export class TaskClient {
         );
     }
 
-    async listAsAssignee(token: string): Promise<ApiResponse<TaskResponse[]>> {
-        return this.api.get<TaskResponse[]>(
+    async listAsAssignee(token: string): Promise<ApiResponse<TaskListResponse>> {
+        return this.api.get<TaskListResponse>(
             "/tasks/assignee",
             { 'Authorization': `Bearer ${token}` }
         );
     }
 
-    async listAsReporter(token: string): Promise<ApiResponse<TaskResponse[]>> {
-        return this.api.get<TaskResponse[]>(
+    async listAsReporter(token: string): Promise<ApiResponse<TaskListResponse>> {
+        return this.api.get<TaskListResponse>(
             "/tasks/reporter",
             { 'Authorization': `Bearer ${token}` }
         );

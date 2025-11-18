@@ -1,14 +1,14 @@
 import { defineConfig } from "@playwright/test";
 import * as dotenv from 'dotenv'
 
-dotenv.config()
+dotenv.config({path: '.env'})
 
 export default defineConfig({
     testDir: './tests',
     timeout: 30_000,
     fullyParallel: false,
     workers: 1,
-    retries: process.env.CI ? 2 : 0,
+    retries: process.env.CI ? 1 : 0,
 
     reporter :[
         ['list'],
