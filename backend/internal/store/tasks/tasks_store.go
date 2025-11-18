@@ -39,6 +39,11 @@ type Task struct {
 	CreatedAt      time.Time  `json:"created_at"`
 	UpdatedAt      time.Time  `json:"updated_at"`
 }
+type TaskUpdate struct {
+	Title       *string `json:"title"`
+	Description *string `json:"description"`
+	DueAt       *time.Time
+}
 
 type TaskStore interface {
 	Create(
@@ -62,6 +67,13 @@ type TaskStore interface {
 		ctx context.Context,
 		taskID uuid.UUID,
 		newStatus TaskStatus,
+		now time.Time,
+	) (*Task, error)
+
+	UpdateDetails(
+		ctx context.Context,
+		taskID uuid.UUID,
+		patch TaskUpdate,
 		now time.Time,
 	) (*Task, error)
 
@@ -116,6 +128,24 @@ func validateTask(title string, reporterID, assigneeID uuid.UUID, dueAt, now tim
 	}
 	if dueAt.Before(now) {
 		return fmt.Errorf("%w: due_at must be in the future", ErrInvalidInput)
+	}
+	return nil
+}
+
+func validateTaskUpdate(upd TaskUpdate, now time.Time) error {
+	if upd.Title != nil {
+		t := strings.TrimSpace(*upd.Title)
+		if t == "" {
+			return fmt.Errorf("%w: title cannot be empty", ErrInvalidInput)
+		}
+		if len(t) > 500 {
+			return fmt.Errorf("%w: title tooo long (max 500 chars)", ErrInvalidInput)
+		}
+	}
+	if upd.DueAt != nil {
+		if upd.DueAt.Before(now.Add(8 * time.Hour)) {
+			return fmt.Errorf("%w: due_at must be at least 8 hours in future from now", ErrInvalidInput)
+		}
 	}
 	return nil
 }
@@ -419,6 +449,56 @@ func (s *PGTaskStore) DeleteTask(ctx context.Context, id uuid.UUID) error {
 		return ErrTaskNotFound
 	}
 	return nil
+}
+func (s *PGTaskStore) UpdateDetails(ctx context.Context, taskID uuid.UUID, patch TaskUpdate, now time.Time) (*Task, error) {
+	if err := validateTaskUpdate(patch, now); err != nil {
+		return nil, err
+	}
+
+	existing, err := s.GetTaskByID(ctx, taskID)
+	if err != nil {
+		return nil, err
+	}
+
+	if patch.Title != nil {
+		existing.Title = strings.TrimSpace(*patch.Title)
+	}
+	if patch.Description != nil {
+		existing.Description = patch.Description
+	}
+	if patch.DueAt != nil {
+		existing.DueAt = patch.DueAt.UTC()
+	}
+	existing.UpdatedAt = now.UTC()
+
+	q := `UPDATE tasks SET title = $2, description = $3, due_at = $4, updated_at = $5 WHERE id = $1 ` + taskReturning
+	var o Task
+	if err := s.pool.QueryRow(ctx, q,
+		existing.ID,
+		existing.Title,
+		existing.Description,
+		existing.DueAt,
+		existing.UpdatedAt,
+	).Scan(
+		&o.ID,
+		&o.Title,
+		&o.Description,
+		&o.ReporterID,
+		&o.AssigneeID,
+		&o.DueAt,
+		&o.ReminderSentAt,
+		&o.Status,
+		&o.CreatedAt,
+		&o.UpdatedAt,
+	); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrTaskNotFound
+		}
+		return nil, fmt.Errorf("update task details: %w", err)
+	}
+
+	return &o, nil
+
 }
 
 var _ TaskStore = (*PGTaskStore)(nil)

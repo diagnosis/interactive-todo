@@ -39,6 +39,15 @@ export const taskApi = {
     getTask : async (taskId: string) =>{
         const response = await apiClient.get(`/tasks/${taskId}`)
         return response.data.data
+    },
+
+    update: async (taskId: string, data: {
+        title?: string,
+        description?: string,
+        due_at?: string,
+    }) => {
+        const response = await apiClient.patch(`/tasks/${taskId}/update-details`, data)
+        return response.data.data
     }
 
 }

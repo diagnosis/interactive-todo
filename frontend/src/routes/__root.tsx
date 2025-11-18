@@ -1,15 +1,26 @@
 import { createRootRoute, Link, Outlet, useNavigate } from "@tanstack/react-router"
 import { useMutation } from "@tanstack/react-query"
 import { authApi } from "../api/auth"
+import { useState, useEffect } from "react"
 
 const RootLayout = () => {
     const navigate = useNavigate()
-    const isLoggedIn = !!localStorage.getItem('access_token')
+    const [isLoggedIn, setIsLoggedIn] = useState(!!localStorage.getItem('access_token'))
+
+    useEffect(() => {
+        const checkAuth = () => {
+            setIsLoggedIn(!!localStorage.getItem('access_token'))
+        }
+        window.addEventListener('storage', checkAuth)
+        checkAuth()
+        return () => window.removeEventListener('storage', checkAuth)
+    }, [])
 
     const logoutMutation = useMutation({
         mutationFn: () => authApi.logout(),
         onSuccess: () => {
             localStorage.removeItem('access_token')
+            setIsLoggedIn(false)
             navigate({ to: '/login' })
         },
     })
