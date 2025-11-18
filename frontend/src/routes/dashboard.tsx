@@ -1,4 +1,4 @@
-import { createFileRoute, useNavigate } from '@tanstack/react-router'
+import { createFileRoute } from '@tanstack/react-router'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { taskApi } from '../api/taskApi'
@@ -18,12 +18,6 @@ function DashboardPage() {
     const [editingTask, setEditingTask] = useState<Task | null>(null)
     const [updatingStatusTask, setUpdatingStatusTask] = useState<Task | null>(null)
     const queryClient = useQueryClient()
-    const navigate = useNavigate()
-
-    const handleLogout = () => {
-        localStorage.removeItem('access_token')
-        navigate({ to: '/login' })
-    }
 
     // Fetch tasks based on view mode
     const { data, isLoading, error } = useQuery<TaskListResponse>({
@@ -100,20 +94,12 @@ function DashboardPage() {
                 {/* Header */}
                 <div className="flex justify-between items-center mb-8">
                     <h1 className="text-3xl font-bold">My Tasks</h1>
-                    <div className="flex gap-3">
-                        <button
-                            onClick={() => setIsCreateModalOpen(true)}
-                            className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
-                        >
-                            + New Task
-                        </button>
-                        <button
-                            onClick={handleLogout}
-                            className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700"
-                        >
-                            Logout
-                        </button>
-                    </div>
+                    <button
+                        onClick={() => setIsCreateModalOpen(true)}
+                        className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+                    >
+                        + New Task
+                    </button>
                 </div>
 
                 {/* Tabs */}

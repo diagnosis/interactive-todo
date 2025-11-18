@@ -16,6 +16,7 @@ function LoginPage() {
         mutationFn: () => authApi.login(email, password),
         onSuccess: (data) => {
             localStorage.setItem("access_token", data.access_token)
+            window.dispatchEvent(new Event('storage'))
             navigate({to: "/dashboard"})
         },
         onError : (error: any) => {
