@@ -59,6 +59,7 @@ func SetupRouter(application *app.Application) *chi.Mux {
 			tr.Delete("/", application.TaskHandler.DeleteTask)        // ✅ Use 'tr'
 			tr.Patch("/assign", application.TaskHandler.AssignTask)   // ✅ Use 'tr'
 			tr.Patch("/status", application.TaskHandler.UpdateStatus) // ✅ Use 'tr'
+			tr.Patch("/update-details", application.TaskHandler.HandlePatchTask)
 		})
 	})
 

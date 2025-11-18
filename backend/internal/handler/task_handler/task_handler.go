@@ -346,6 +346,92 @@ func (h *TaskHandler) listTasks(w http.ResponseWriter, r *http.Request, isReport
 	}
 	helper.RespondJSON(w, r, http.StatusOK, response)
 }
+func (h *TaskHandler) HandlePatchTask(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	defer cancel()
+
+	logger.Info(ctx, "patch task: start")
+
+	// 1) Auth
+	userID, ok := middleware.GetUserIDFromContext(ctx)
+	if !ok {
+		helper.RespondError(w, r, apperror.Unauthorized("unauthorized"))
+		return
+	}
+
+	// 2) Parse task ID
+	taskID, err := parseTaskID(r)
+	if err != nil {
+		logger.Error(ctx, "invalid task id", "err", err)
+		helper.RespondError(w, r, apperror.BadRequest("invalid task id"))
+		return
+	}
+
+	// 3) Load task (for perms + existence)
+	task, err := h.getTaskByID(ctx, taskID)
+	if err != nil {
+		if errors.Is(err, store.ErrTaskNotFound) {
+			helper.RespondError(w, r, apperror.NotFound("task not found"))
+			return
+		}
+		logger.Error(ctx, "failed to get task", "err", err)
+		helper.RespondError(w, r, apperror.InternalError("internal error", err))
+		return
+	}
+
+	// 4) Permission: only reporter can patch title/description/due_at
+	if task.ReporterID != userID {
+		logger.Info(ctx, "forbidden: only creator can update task details",
+			"userID", userID,
+			"reporterID", task.ReporterID,
+		)
+		helper.RespondError(w, r, apperror.Forbidden("only creator can update title, description and due_at"))
+		return
+	}
+
+	// 5) Decode JSON body
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
+	defer r.Body.Close()
+
+	dec := json.NewDecoder(r.Body)
+	dec.DisallowUnknownFields()
+
+	var in patchTaskInput
+	if err := dec.Decode(&in); err != nil {
+		logger.Error(ctx, "bad json in patch task", "err", err)
+		helper.RespondError(w, r, apperror.BadRequest("invalid request body"))
+		return
+	}
+
+	// Optional: reject no-op patch
+	if in.Title == nil && in.Description == nil && in.DueAt == nil {
+		helper.RespondError(w, r, apperror.BadRequest("at least one of title, description, or due_at must be provided"))
+		return
+	}
+
+	// 6) Delegate to store
+	now := time.Now().UTC()
+	updatedTask, err := h.taskStore.UpdateDetails(ctx, taskID, store.TaskUpdate{
+		Title:       in.Title,
+		Description: in.Description,
+		DueAt:       in.DueAt,
+	}, now)
+	if err != nil {
+		switch {
+		case errors.Is(err, store.ErrTaskNotFound):
+			helper.RespondError(w, r, apperror.NotFound("task not found"))
+		case errors.Is(err, store.ErrInvalidInput):
+			helper.RespondError(w, r, apperror.BadRequest(err.Error()))
+		default:
+			logger.Error(ctx, "failed to update task details", "err", err)
+			helper.RespondError(w, r, apperror.InternalError("internal error", err))
+		}
+		return
+	}
+
+	logger.Info(ctx, "patch task: success", "taskID", taskID)
+	helper.RespondJSON(w, r, http.StatusOK, updatedTask)
+}
 
 // helpers
 func taskInputValidation(in input) error {
@@ -365,4 +451,10 @@ func isValidStatus(status store.TaskStatus) bool {
 	default:
 		return false
 	}
+}
+
+type patchTaskInput struct {
+	Title       *string    `json:"title"`
+	Description *string    `json:"description"`
+	DueAt       *time.Time `json:"due_at"`
 }
