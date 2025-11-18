@@ -28,3 +28,4 @@ backend/.env
 # Test coverage
 *.out
 coverage.html
+.env
