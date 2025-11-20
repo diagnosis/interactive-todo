@@ -1,46 +1,67 @@
-import { createFileRoute } from '@tanstack/react-router'
+import { createFileRoute, Link } from '@tanstack/react-router'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
+import { teamApi } from '../api/teamApi'
 import { taskApi } from '../api/taskApi'
-import type {Task, TaskListResponse, TaskStatus} from '../types/task'
+import type { Task, TaskStatus } from '../types/task'
 import { Modal } from '../components/Modal'
 import { TaskForm } from '../components/TaskForm'
 
-export const Route = createFileRoute('/dashboard')({
-    component: DashboardPage,
+export const Route = createFileRoute('/teams/$teamId/tasks')({
+    component: TeamTasksPage,
 })
 
-type ViewMode = 'reporter' | 'assignee'
+type ViewMode = 'all' | 'assignee' | 'reporter'
 
-function DashboardPage() {
+function TeamTasksPage() {
+    const { teamId } = Route.useParams()
+    const [viewMode, setViewMode] = useState<ViewMode>('all')
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
-    const [viewMode, setViewMode] = useState<ViewMode>('reporter')
     const [reassigningTask, setReassigningTask] = useState<Task | null>(null)
     const [editingTask, setEditingTask] = useState<Task | null>(null)
     const [updatingStatusTask, setUpdatingStatusTask] = useState<Task | null>(null)
     const queryClient = useQueryClient()
 
-    // Fetch tasks based on view mode
-    const { data, isLoading, error } = useQuery<TaskListResponse>({
-        queryKey: ['tasks', viewMode],
-        queryFn: viewMode === 'reporter' ? taskApi.listAsReporter : taskApi.listAsAssignee,
+    const { data: teamData } = useQuery({
+        queryKey: ['teams'],
+        queryFn: teamApi.listMyTeams,
     })
 
-    // Fetch counts for both tabs
-    const { data: reporterData } = useQuery<TaskListResponse>({
-        queryKey: ['tasks', 'reporter'],
-        queryFn: taskApi.listAsReporter,
+    const team = teamData?.teams?.find((t) => t.id === teamId)
+
+    const { data, isLoading, error } = useQuery({
+        queryKey: ['team-tasks', teamId, viewMode],
+        queryFn: () => {
+            switch (viewMode) {
+                case 'assignee':
+                    return teamApi.listAssigneeTasksInTeam(teamId)
+                case 'reporter':
+                    return teamApi.listReporterTasksInTeam(teamId)
+                default:
+                    return teamApi.listTeamTasks(teamId)
+            }
+        },
     })
 
-    const { data: assigneeData } = useQuery<TaskListResponse>({
-        queryKey: ['tasks', 'assignee'],
-        queryFn: taskApi.listAsAssignee,
+    const { data: allData } = useQuery({
+        queryKey: ['team-tasks', teamId, 'all'],
+        queryFn: () => teamApi.listTeamTasks(teamId),
+    })
+
+    const { data: assigneeData } = useQuery({
+        queryKey: ['team-tasks', teamId, 'assignee'],
+        queryFn: () => teamApi.listAssigneeTasksInTeam(teamId),
+    })
+
+    const { data: reporterData } = useQuery({
+        queryKey: ['team-tasks', teamId, 'reporter'],
+        queryFn: () => teamApi.listReporterTasksInTeam(teamId),
     })
 
     const deleteMutation = useMutation({
         mutationFn: taskApi.delete,
         onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ['tasks'] })
+            queryClient.invalidateQueries({ queryKey: ['team-tasks', teamId] })
             alert('Task deleted successfully')
         },
         onError: (error: any) => {
@@ -52,7 +73,7 @@ function DashboardPage() {
         mutationFn: ({ taskId, status }: { taskId: string; status: TaskStatus }) =>
             taskApi.updateStatus(taskId, status),
         onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ['tasks'] })
+            queryClient.invalidateQueries({ queryKey: ['team-tasks', teamId] })
             setUpdatingStatusTask(null)
             alert('Status updated successfully')
         },
@@ -89,40 +110,37 @@ function DashboardPage() {
         )
     }
 
+    const tasks = data?.tasks || []
+
     return (
         <div className="min-h-screen bg-gray-50 p-8">
             <div className="max-w-7xl mx-auto">
-                {/* Header */}
                 <div className="flex justify-between items-center mb-8">
-                    <h1 className="text-3xl font-bold">My Tasks</h1>
-                    <div className="flex gap-3">
-                        <Link
-                            to="/teams"
-                            className="px-4 py-2 bg-gray-100 text-gray-700 rounded hover:bg-gray-200"
-                        >
-                            View Teams
+                    <div>
+                        <Link to="/teams" className="text-sm text-blue-600 hover:text-blue-700 mb-2 inline-block">
+                            ← Back to Teams
                         </Link>
-                        <button
-                            onClick={() => setIsCreateModalOpen(true)}
-                            className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
-                        >
-                            + New Task
-                        </button>
+                        <h1 className="text-3xl font-bold">{team?.name || 'Team'} Tasks</h1>
                     </div>
+                    <button
+                        onClick={() => setIsCreateModalOpen(true)}
+                        className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+                    >
+                        + New Task
+                    </button>
                 </div>
 
-                {/* Tabs */}
                 <div className="mb-6 border-b border-gray-200">
                     <nav className="flex space-x-8">
                         <button
-                            onClick={() => setViewMode('reporter')}
+                            onClick={() => setViewMode('all')}
                             className={`py-4 px-1 border-b-2 font-medium text-sm ${
-                                viewMode === 'reporter'
+                                viewMode === 'all'
                                     ? 'border-blue-500 text-blue-600'
                                     : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                             }`}
                         >
-                            Created by Me ({reporterData?.tasks?.length || 0})
+                            All Tasks ({allData?.tasks?.length || 0})
                         </button>
                         <button
                             onClick={() => setViewMode('assignee')}
@@ -134,66 +152,75 @@ function DashboardPage() {
                         >
                             Assigned to Me ({assigneeData?.tasks?.length || 0})
                         </button>
+                        <button
+                            onClick={() => setViewMode('reporter')}
+                            className={`py-4 px-1 border-b-2 font-medium text-sm ${
+                                viewMode === 'reporter'
+                                    ? 'border-blue-500 text-blue-600'
+                                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                            }`}
+                        >
+                            Created by Me ({reporterData?.tasks?.length || 0})
+                        </button>
                     </nav>
                 </div>
 
-                {/* Task List */}
                 <div className="bg-white rounded-lg shadow">
-                    {!data?.tasks || data.tasks.length === 0 ? (
+                    {tasks.length === 0 ? (
                         <div className="p-8 text-center text-gray-500">
-                            {viewMode === 'reporter'
-                                ? 'No tasks created yet. Create your first task!'
-                                : 'No tasks assigned to you yet.'}
+                            {viewMode === 'all'
+                                ? 'No tasks in this team yet. Create your first task!'
+                                : viewMode === 'reporter'
+                                ? 'You have not created any tasks in this team yet.'
+                                : 'No tasks assigned to you in this team yet.'}
                         </div>
                     ) : (
                         <div className="divide-y">
-                            {data.tasks.map((task) => (
+                            {tasks.map((task) => (
                                 <div key={task.id} className="p-4 hover:bg-gray-50">
                                     <div className="flex items-center justify-between">
                                         <div className="flex-1">
                                             <h3 className="font-medium text-gray-900">{task.title}</h3>
                                             <p className="text-sm text-gray-500 mt-1">{task.description}</p>
                                             <div className="flex items-center gap-2 mt-2">
-                        <span className={`px-2 py-1 text-xs font-medium rounded capitalize ${getStatusColor(task.status)}`}>
-                          {task.status.replace('_', ' ')}
-                        </span>
+                                                <span
+                                                    className={`px-2 py-1 text-xs font-medium rounded capitalize ${getStatusColor(
+                                                        task.status
+                                                    )}`}
+                                                >
+                                                    {task.status.replace('_', ' ')}
+                                                </span>
                                                 <span className="text-xs text-gray-400">
-                          Due: {new Date(task.due_at).toLocaleDateString()}
-                        </span>
+                                                    Due: {new Date(task.due_at).toLocaleDateString()}
+                                                </span>
                                             </div>
                                         </div>
                                         <div className="flex gap-2">
-                                            {viewMode === 'reporter' && (
-                                                <>
-                                                    <button
-                                                        onClick={() => setEditingTask(task)}
-                                                        className="px-3 py-1 text-sm text-blue-600 hover:bg-blue-50 rounded"
-                                                    >
-                                                        Edit
-                                                    </button>
-                                                    <button
-                                                        onClick={() => setReassigningTask(task)}
-                                                        className="px-3 py-1 text-sm text-green-600 hover:bg-green-50 rounded"
-                                                    >
-                                                        Reassign
-                                                    </button>
-                                                    <button
-                                                        onClick={() => handleDelete(task.id)}
-                                                        disabled={deleteMutation.isPending}
-                                                        className="px-3 py-1 text-sm text-red-600 hover:bg-red-50 rounded disabled:opacity-50"
-                                                    >
-                                                        Delete
-                                                    </button>
-                                                </>
-                                            )}
-                                            {viewMode === 'assignee' && (
-                                                <button
-                                                    onClick={() => setUpdatingStatusTask(task)}
-                                                    className="px-3 py-1 text-sm text-blue-600 hover:bg-blue-50 rounded"
-                                                >
-                                                    Update Status
-                                                </button>
-                                            )}
+                                            <button
+                                                onClick={() => setEditingTask(task)}
+                                                className="px-3 py-1 text-sm text-blue-600 hover:bg-blue-50 rounded"
+                                            >
+                                                Edit
+                                            </button>
+                                            <button
+                                                onClick={() => setReassigningTask(task)}
+                                                className="px-3 py-1 text-sm text-green-600 hover:bg-green-50 rounded"
+                                            >
+                                                Reassign
+                                            </button>
+                                            <button
+                                                onClick={() => setUpdatingStatusTask(task)}
+                                                className="px-3 py-1 text-sm text-purple-600 hover:bg-purple-50 rounded"
+                                            >
+                                                Status
+                                            </button>
+                                            <button
+                                                onClick={() => handleDelete(task.id)}
+                                                disabled={deleteMutation.isPending}
+                                                className="px-3 py-1 text-sm text-red-600 hover:bg-red-50 rounded disabled:opacity-50"
+                                            >
+                                                Delete
+                                            </button>
                                         </div>
                                     </div>
                                 </div>
@@ -203,16 +230,20 @@ function DashboardPage() {
                 </div>
             </div>
 
-            {/* Create Task Modal */}
             <Modal
                 isOpen={isCreateModalOpen}
                 onClose={() => setIsCreateModalOpen(false)}
                 title="Create New Task"
             >
-                <TaskForm onSuccess={() => setIsCreateModalOpen(false)} />
+                <TaskForm
+                    teamId={teamId}
+                    onSuccess={() => {
+                        setIsCreateModalOpen(false)
+                        queryClient.invalidateQueries({ queryKey: ['team-tasks', teamId] })
+                    }}
+                />
             </Modal>
 
-            {/* Edit Task Modal */}
             <Modal
                 isOpen={!!editingTask}
                 onClose={() => setEditingTask(null)}
@@ -221,16 +252,16 @@ function DashboardPage() {
                 {editingTask && (
                     <TaskForm
                         task={editingTask}
+                        teamId={teamId}
                         mode="edit"
                         onSuccess={() => {
                             setEditingTask(null)
-                            queryClient.invalidateQueries({ queryKey: ['tasks'] })
+                            queryClient.invalidateQueries({ queryKey: ['team-tasks', teamId] })
                         }}
                     />
                 )}
             </Modal>
 
-            {/* Reassign Task Modal */}
             <Modal
                 isOpen={!!reassigningTask}
                 onClose={() => setReassigningTask(null)}
@@ -239,16 +270,16 @@ function DashboardPage() {
                 {reassigningTask && (
                     <TaskForm
                         task={reassigningTask}
+                        teamId={teamId}
                         mode="reassign"
                         onSuccess={() => {
                             setReassigningTask(null)
-                            queryClient.invalidateQueries({ queryKey: ['tasks'] })
+                            queryClient.invalidateQueries({ queryKey: ['team-tasks', teamId] })
                         }}
                     />
                 )}
             </Modal>
 
-            {/* Update Status Modal */}
             <Modal
                 isOpen={!!updatingStatusTask}
                 onClose={() => setUpdatingStatusTask(null)}
@@ -258,7 +289,10 @@ function DashboardPage() {
                     <div className="space-y-4">
                         <div>
                             <p className="text-sm text-gray-600 mb-4">
-                                Current Status: <span className="font-medium capitalize">{updatingStatusTask.status.replace('_', ' ')}</span>
+                                Current Status:{' '}
+                                <span className="font-medium capitalize">
+                                    {updatingStatusTask.status.replace('_', ' ')}
+                                </span>
                             </p>
                             <p className="text-sm font-medium text-gray-700 mb-2">Select New Status:</p>
                             <div className="grid grid-cols-2 gap-2">
@@ -266,7 +300,9 @@ function DashboardPage() {
                                     <button
                                         key={status}
                                         onClick={() => handleStatusUpdate(status)}
-                                        disabled={updateStatusMutation.isPending || status === updatingStatusTask.status}
+                                        disabled={
+                                            updateStatusMutation.isPending || status === updatingStatusTask.status
+                                        }
                                         className={`px-4 py-2 rounded text-sm font-medium capitalize transition-colors ${
                                             status === updatingStatusTask.status
                                                 ? 'bg-gray-100 text-gray-400 cursor-not-allowed'

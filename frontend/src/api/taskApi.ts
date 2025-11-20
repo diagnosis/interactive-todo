@@ -11,6 +11,7 @@ export const taskApi = {
     },
 
     create: async (data : {
+        team_id: string,
         title : string,
         description?: string,
         assignee_id?: string,

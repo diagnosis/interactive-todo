@@ -2,6 +2,7 @@ export type TaskStatus = 'open' | 'in_progress' | 'done' | 'canceled'
 
 export interface Task {
     id: string
+    team_id: string
     title: string
     description: string
     reporter_id: string
