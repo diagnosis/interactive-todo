@@ -1,0 +1,94 @@
+name: API Test Suite
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  api-tests:
+    runs-on: ubuntu-latest
+
+    # ⛔️ We don't need a Postgres service if we use Neon.
+    # Remove the 'services: postgres:' block completely.
+
+    env:
+      APP_ENV: ${{ secrets.APP_ENV }}
+      PORT: ${{ secrets.PORT }}
+      DATABASE_URL_DEV: ${{ secrets.DATABASE_URL_DEV }}
+      JWT_ACCESS_SECRET: ${{ secrets.JWT_ACCESS_SECRET }}
+      JWT_REFRESH_SECRET: ${{ secrets.JWT_REFRESH_SECRET }}
+
+      # for Playwright tests
+      COMMON_PASS: ${{ secrets.COMMON_PASS }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      # ===========================
+      # Backend (Go)
+      # ===========================
+      - name: Install Go deps
+        working-directory: ./backend
+        run: go mod download
+
+      - name: Run DB migrations
+        working-directory: ./backend
+        env:
+          APP_ENV: ${{ env.APP_ENV }}
+          DATABASE_URL_DEV: ${{ env.DATABASE_URL_DEV }}
+        run: |
+          # TODO: replace with your real migrate command
+          # e.g.:
+          # go run cmd/migrate/main.go
+          echo "Run migrations here"
+
+      # ===========================
+      # Test project (Playwright)
+      # ===========================
+      - name: Install Node deps (api-test)
+        working-directory: ./tests/api-test
+        run: npm ci
+
+      - name: Install Playwright browsers
+        working-directory: ./tests/api-test
+        run: npx playwright install --with-deps
+
+      - name: Create .env for Playwright tests
+        working-directory: ./tests/api-test
+        run: |
+          cat > .env <<EOF
+COMMON_PASS=${COMMON_PASS}
+EOF
+
+      # ===========================
+      # Start API & run tests
+      # ===========================
+      - name: Start API server
+        working-directory: ./backend
+        env:
+          APP_ENV: ${{ env.APP_ENV }}
+          PORT: ${{ env.PORT }}
+          DATABASE_URL_DEV: ${{ env.DATABASE_URL_DEV }}
+          JWT_ACCESS_SECRET: ${{ env.JWT_ACCESS_SECRET }}
+          JWT_REFRESH_SECRET: ${{ env.JWT_REFRESH_SECRET }}
+        run: |
+          go run cmd/api/main.go &
+          # give server some time to start
+          sleep 5
+
+      - name: Run Playwright API tests
+        working-directory: ./tests/api-test
+        run: npm test
