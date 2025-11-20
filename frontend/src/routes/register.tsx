@@ -10,16 +10,21 @@ export const Route = createFileRoute('/register')({
 function RegisterPage() {
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
+  const [error, setError] = useState("")
   const navigate = useNavigate()
 
   const registerMutation = useMutation({
-    mutationFn: () => authApi.register(email, password),
+    mutationFn: async () => {
+      setError("")
+      return await authApi.register(email, password)
+    },
     onSuccess:() => {
       alert("Account created! Please login")
       navigate( {to : "/login"})
     },
     onError : (err : any) => {
-      alert(err.response?.data?.error?.message || 'Registration failed')
+      const errorMessage = err.response?.data?.error?.message || 'Registration failed. Please try again.'
+      setError(errorMessage)
     }
   })
   const handleSubmit = (e: React.FormEvent)=>{
@@ -33,6 +38,11 @@ function RegisterPage() {
           <h2 className="text-3xl font-bold text-center mb-6">Create Account</h2>
 
           <form onSubmit={handleSubmit} className="space-y-4">
+            {error && (
+                <div className="p-3 bg-red-50 border border-red-200 rounded-md">
+                  <p className="text-sm text-red-600">{error}</p>
+                </div>
+            )}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Email
@@ -40,7 +50,10 @@ function RegisterPage() {
               <input
                   type="email"
                   value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  onChange={(e) => {
+                    setEmail(e.target.value)
+                    setError("")
+                  }}
                   className="w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
                   required
               />
@@ -53,7 +66,10 @@ function RegisterPage() {
               <input
                   type="password"
                   value={password}
-                  onChange={(e) => setPassword(e.target.value)}
+                  onChange={(e) => {
+                    setPassword(e.target.value)
+                    setError("")
+                  }}
                   className="w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
                   minLength={8}
                   required

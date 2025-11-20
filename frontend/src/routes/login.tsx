@@ -10,19 +10,23 @@ export const Route = createFileRoute('/login')({
 function LoginPage() {
     const [email, setEmail] = useState("")
     const [password, setPassword] = useState("")
+    const [error, setError] = useState("")
     const navigate = useNavigate()
 
     const loginMutation = useMutation({
-        mutationFn: () => authApi.login(email, password),
+        mutationFn: async () => {
+            setError("")
+            return await authApi.login(email, password)
+        },
         onSuccess: (data) => {
             localStorage.setItem("access_token", data.access_token)
             window.dispatchEvent(new Event('storage'))
             navigate({to: "/dashboard"})
         },
         onError : (error: any) => {
-            alert(error.response?.data?.error?.message || "login failed")
+            const errorMessage = error.response?.data?.error?.message || "Login failed. Please check your credentials."
+            setError(errorMessage)
         }
-
     })
 
     function handleSubmit(e : React.FormEvent){
@@ -36,6 +40,11 @@ function LoginPage() {
           <div className="max-w-md w-full p-8 bg-white rounded-lg shadow">
               <h2 className="text-3xl font-bold text-center mb-6">Sign In</h2>
               <form onSubmit={handleSubmit} className="space-y-4">
+                  {error && (
+                      <div className="p-3 bg-red-50 border border-red-200 rounded-md">
+                          <p className="text-sm text-red-600">{error}</p>
+                      </div>
+                  )}
                   <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
                           Email
@@ -44,7 +53,10 @@ function LoginPage() {
                           type="email"
                           placeholder="you@example.com"
                           value={email}
-                          onChange={(e)=> setEmail(e.target.value)}
+                          onChange={(e)=> {
+                              setEmail(e.target.value)
+                              setError("")
+                          }}
                           className='w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500'
                           required/>
                   </div>
@@ -54,7 +66,10 @@ function LoginPage() {
                           type="password"
                           placeholder="password"
                           value={password}
-                          onChange={(e)=>setPassword(e.target.value)}
+                          onChange={(e)=> {
+                              setPassword(e.target.value)
+                              setError("")
+                          }}
                           className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                           required/>
                   </div>
