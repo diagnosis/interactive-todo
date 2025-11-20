@@ -29,6 +29,7 @@ var (
 
 type Task struct {
 	ID             uuid.UUID  `json:"id"`
+	TeamID         uuid.UUID  `json:"team_id"`
 	Title          string     `json:"title"`
 	Description    *string    `json:"description,omitempty"`
 	ReporterID     uuid.UUID  `json:"reporter_id"`
@@ -39,15 +40,17 @@ type Task struct {
 	CreatedAt      time.Time  `json:"created_at"`
 	UpdatedAt      time.Time  `json:"updated_at"`
 }
+
 type TaskUpdate struct {
-	Title       *string `json:"title"`
-	Description *string `json:"description"`
-	DueAt       *time.Time
+	Title       *string    `json:"title"`
+	Description *string    `json:"description"`
+	DueAt       *time.Time `json:"due_at"`
 }
 
 type TaskStore interface {
 	Create(
 		ctx context.Context,
+		teamID uuid.UUID,
 		title string,
 		description *string,
 		reporterID uuid.UUID,
@@ -82,15 +85,19 @@ type TaskStore interface {
 	GetTasksByReporterID(ctx context.Context, reporterID uuid.UUID) ([]Task, error)
 	GetAllTasks(ctx context.Context) ([]Task, error)
 	DeleteTask(ctx context.Context, id uuid.UUID) error
+	//team member actions
+	ListTeamTasks(ctx context.Context, userID uuid.UUID) ([]Task, error)
+	ListAssigneeTasksInTeam(ctx context.Context, teamID, userID uuid.UUID) ([]Task, error)
+	ListReporterTasksInTeam(ctx context.Context, teamID uuid.UUID, userID uuid.UUID) ([]Task, error)
 
-	// FindDueForReminder finds tasks that need reminders
-	// Tasks are selected if they're due between now and 'before' time
 	FindDueForReminder(ctx context.Context, from, before time.Time) ([]Task, error)
 	MarkReminderSent(ctx context.Context, taskID uuid.UUID, when time.Time) error
 }
 
+// NOTE: order must match table + all Scan calls
 const taskColumns = `
     id,
+    team_id,
     title,
     description,
     reporter_id,
@@ -110,6 +117,71 @@ type PGTaskStore struct {
 
 func NewPGTaskStore(pool *pgxpool.Pool) *PGTaskStore {
 	return &PGTaskStore{pool: pool}
+}
+func (s *PGTaskStore) ListReporterTasksInTeam(
+	ctx context.Context,
+	teamID uuid.UUID,
+	userID uuid.UUID,
+) ([]Task, error) {
+	if teamID == uuid.Nil || userID == uuid.Nil {
+		return nil, fmt.Errorf("%w: team_id and user_id cannot be nil", ErrInvalidInput)
+	}
+
+	const q = `
+		SELECT ` + taskColumns + `
+		FROM tasks
+		WHERE team_id = $1
+		  AND reporter_id = $2
+		ORDER BY created_at DESC;
+	`
+
+	rows, err := s.pool.Query(ctx, q, teamID, userID)
+	if err != nil {
+		return nil, fmt.Errorf("list reporter tasks in team: %w", err)
+	}
+	defer rows.Close()
+
+	return scanTask(rows)
+}
+func (s *PGTaskStore) ListAssigneeTasksInTeam(ctx context.Context, teamID, userID uuid.UUID) ([]Task, error) {
+	if teamID == uuid.Nil || userID == uuid.Nil {
+		return nil, fmt.Errorf("%w: team_id and user_id cannot be nil", ErrInvalidInput)
+	}
+
+	const q = `
+		SELECT ` + taskColumns + ` 
+		FROM tasks
+		WHERE team_id = $1
+			AND assignee_id = $2
+		ORDER BY due_at;
+`
+	rows, err := s.pool.Query(ctx, q, teamID, userID)
+	if err != nil {
+		return nil, fmt.Errorf("list assignee tasks in team: %w", err)
+	}
+	defer rows.Close()
+
+	return scanTask(rows)
+}
+func (s *PGTaskStore) ListTeamTasks(ctx context.Context, teamID uuid.UUID) ([]Task, error) {
+	if teamID == uuid.Nil {
+		return nil, fmt.Errorf("%w: team_id cannot be nil", ErrInvalidInput)
+	}
+
+	const q = `
+		SELECT ` + taskColumns + `
+		FROM tasks
+		WHERE team_id = $1
+		ORDER BY created_at DESC;
+	`
+
+	rows, err := s.pool.Query(ctx, q, teamID)
+	if err != nil {
+		return nil, fmt.Errorf("list team tasks: %w", err)
+	}
+	defer rows.Close()
+
+	return scanTask(rows)
 }
 
 // validateTask performs input validation
@@ -139,7 +211,7 @@ func validateTaskUpdate(upd TaskUpdate, now time.Time) error {
 			return fmt.Errorf("%w: title cannot be empty", ErrInvalidInput)
 		}
 		if len(t) > 500 {
-			return fmt.Errorf("%w: title tooo long (max 500 chars)", ErrInvalidInput)
+			return fmt.Errorf("%w: title too long (max 500 chars)", ErrInvalidInput)
 		}
 	}
 	if upd.DueAt != nil {
@@ -152,6 +224,7 @@ func validateTaskUpdate(upd TaskUpdate, now time.Time) error {
 
 func (s *PGTaskStore) Create(
 	ctx context.Context,
+	teamID uuid.UUID,
 	title string,
 	description *string,
 	reporterID uuid.UUID,
@@ -159,12 +232,16 @@ func (s *PGTaskStore) Create(
 	dueAt time.Time,
 	now time.Time,
 ) (*Task, error) {
+	if teamID == uuid.Nil {
+		return nil, fmt.Errorf("%w: team_id cannot be nil", ErrInvalidInput)
+	}
 	if err := validateTask(title, reporterID, assigneeID, dueAt, now); err != nil {
 		return nil, err
 	}
 
-	q := `
+	const q = `
 		INSERT INTO tasks (
+			team_id,
 			title,
 			description,
 			reporter_id,
@@ -173,11 +250,12 @@ func (s *PGTaskStore) Create(
 			created_at,
 			updated_at
 		)
-		VALUES ($1, $2, $3, $4, $5, $6, $6)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $7)
 		` + taskReturning
 
 	var o Task
 	if err := s.pool.QueryRow(ctx, q,
+		teamID,
 		title,
 		description,
 		reporterID,
@@ -186,6 +264,7 @@ func (s *PGTaskStore) Create(
 		now.UTC(),
 	).Scan(
 		&o.ID,
+		&o.TeamID,
 		&o.Title,
 		&o.Description,
 		&o.ReporterID,
@@ -212,7 +291,7 @@ func (s *PGTaskStore) Assign(
 		return nil, fmt.Errorf("%w: assignee_id cannot be nil", ErrInvalidInput)
 	}
 
-	q := `
+	const q = `
 		UPDATE tasks
 		SET assignee_id = $2,
 		    updated_at  = $3
@@ -226,6 +305,7 @@ func (s *PGTaskStore) Assign(
 		now.UTC(),
 	).Scan(
 		&o.ID,
+		&o.TeamID,
 		&o.Title,
 		&o.Description,
 		&o.ReporterID,
@@ -257,7 +337,7 @@ func (s *PGTaskStore) UpdateStatus(
 		return nil, ErrInvalidStatus
 	}
 
-	q := `
+	const q = `
 		UPDATE tasks
 		SET status     = $2,
 		    updated_at = $3
@@ -271,6 +351,7 @@ func (s *PGTaskStore) UpdateStatus(
 		now.UTC(),
 	).Scan(
 		&o.ID,
+		&o.TeamID,
 		&o.Title,
 		&o.Description,
 		&o.ReporterID,
@@ -291,7 +372,7 @@ func (s *PGTaskStore) UpdateStatus(
 }
 
 func (s *PGTaskStore) GetTaskByID(ctx context.Context, id uuid.UUID) (*Task, error) {
-	q := `
+	const q = `
 		SELECT ` + taskColumns + `
 		FROM tasks
 		WHERE id = $1
@@ -300,6 +381,7 @@ func (s *PGTaskStore) GetTaskByID(ctx context.Context, id uuid.UUID) (*Task, err
 	var o Task
 	if err := s.pool.QueryRow(ctx, q, id).Scan(
 		&o.ID,
+		&o.TeamID,
 		&o.Title,
 		&o.Description,
 		&o.ReporterID,
@@ -325,6 +407,7 @@ func scanTask(rows pgx.Rows) ([]Task, error) {
 		var t Task
 		if err := rows.Scan(
 			&t.ID,
+			&t.TeamID,
 			&t.Title,
 			&t.Description,
 			&t.ReporterID,
@@ -343,7 +426,7 @@ func scanTask(rows pgx.Rows) ([]Task, error) {
 }
 
 func (s *PGTaskStore) GetTasksByAssigneeID(ctx context.Context, assigneeID uuid.UUID) ([]Task, error) {
-	q := `
+	const q = `
 		SELECT ` + taskColumns + `
 		FROM tasks
 		WHERE assignee_id = $1
@@ -360,7 +443,7 @@ func (s *PGTaskStore) GetTasksByAssigneeID(ctx context.Context, assigneeID uuid.
 }
 
 func (s *PGTaskStore) GetTasksByReporterID(ctx context.Context, reporterID uuid.UUID) ([]Task, error) {
-	q := `
+	const q = `
 		SELECT ` + taskColumns + `
 		FROM tasks
 		WHERE reporter_id = $1
@@ -377,7 +460,7 @@ func (s *PGTaskStore) GetTasksByReporterID(ctx context.Context, reporterID uuid.
 }
 
 func (s *PGTaskStore) GetAllTasks(ctx context.Context) ([]Task, error) {
-	q := `
+	const q = `
 		SELECT ` + taskColumns + `
 		FROM tasks
 		ORDER BY created_at DESC
@@ -392,13 +475,12 @@ func (s *PGTaskStore) GetAllTasks(ctx context.Context) ([]Task, error) {
 	return scanTask(rows)
 }
 
-// FindDueForReminder finds tasks due between 'from' and 'before' that need reminders
 func (s *PGTaskStore) FindDueForReminder(
 	ctx context.Context,
 	from time.Time,
 	before time.Time,
 ) ([]Task, error) {
-	q := `
+	const q = `
 		SELECT ` + taskColumns + `
 		FROM tasks
 		WHERE due_at > $1
@@ -422,7 +504,7 @@ func (s *PGTaskStore) MarkReminderSent(
 	taskID uuid.UUID,
 	when time.Time,
 ) error {
-	q := `
+	const q = `
 		UPDATE tasks
 		SET reminder_sent_at = $2,
 		    updated_at       = $2
@@ -440,17 +522,24 @@ func (s *PGTaskStore) MarkReminderSent(
 }
 
 func (s *PGTaskStore) DeleteTask(ctx context.Context, id uuid.UUID) error {
-	q := `DELETE FROM tasks WHERE id  = $1; `
+	const q = `DELETE FROM tasks WHERE id = $1`
+
 	ct, err := s.pool.Exec(ctx, q, id)
 	if err != nil {
-		return err
+		return fmt.Errorf("delete task: %w", err)
 	}
 	if ct.RowsAffected() == 0 {
 		return ErrTaskNotFound
 	}
 	return nil
 }
-func (s *PGTaskStore) UpdateDetails(ctx context.Context, taskID uuid.UUID, patch TaskUpdate, now time.Time) (*Task, error) {
+
+func (s *PGTaskStore) UpdateDetails(
+	ctx context.Context,
+	taskID uuid.UUID,
+	patch TaskUpdate,
+	now time.Time,
+) (*Task, error) {
 	if err := validateTaskUpdate(patch, now); err != nil {
 		return nil, err
 	}
@@ -471,7 +560,15 @@ func (s *PGTaskStore) UpdateDetails(ctx context.Context, taskID uuid.UUID, patch
 	}
 	existing.UpdatedAt = now.UTC()
 
-	q := `UPDATE tasks SET title = $2, description = $3, due_at = $4, updated_at = $5 WHERE id = $1 ` + taskReturning
+	const q = `
+		UPDATE tasks
+		SET title       = $2,
+		    description = $3,
+		    due_at      = $4,
+		    updated_at  = $5
+		WHERE id = $1
+		` + taskReturning
+
 	var o Task
 	if err := s.pool.QueryRow(ctx, q,
 		existing.ID,
@@ -481,6 +578,7 @@ func (s *PGTaskStore) UpdateDetails(ctx context.Context, taskID uuid.UUID, patch
 		existing.UpdatedAt,
 	).Scan(
 		&o.ID,
+		&o.TeamID,
 		&o.Title,
 		&o.Description,
 		&o.ReporterID,
@@ -498,7 +596,6 @@ func (s *PGTaskStore) UpdateDetails(ctx context.Context, taskID uuid.UUID, patch
 	}
 
 	return &o, nil
-
 }
 
 var _ TaskStore = (*PGTaskStore)(nil)

@@ -7,9 +7,11 @@ import (
 	jwttoken "github.com/diagnosis/interactive-todo/internal/auth/jwt"
 	authhandler "github.com/diagnosis/interactive-todo/internal/handler/auth"
 	taskhandler "github.com/diagnosis/interactive-todo/internal/handler/task_handler"
+	teamHandler "github.com/diagnosis/interactive-todo/internal/handler/team"
 	authmiddleware "github.com/diagnosis/interactive-todo/internal/middleware/auth"
 	refreshtoken "github.com/diagnosis/interactive-todo/internal/store/refresh_tokens"
 	taskstore "github.com/diagnosis/interactive-todo/internal/store/tasks"
+	teamstore "github.com/diagnosis/interactive-todo/internal/store/teams"
 	userstore "github.com/diagnosis/interactive-todo/internal/store/users"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -19,7 +21,7 @@ type Application struct {
 	UserStore         userstore.UserStore
 	TaskStore         taskstore.TaskStore
 	RefreshTokenStore refreshtoken.RefreshTokenStore
-
+	TeamStore         teamstore.TeamStore
 	//Auth
 	JWTManager     jwttoken.TokenManager
 	AuthMiddleware *authmiddleware.AuthMiddleware
@@ -27,7 +29,7 @@ type Application struct {
 	//handler
 	AuthHandler *authhandler.AuthHandler
 	TaskHandler *taskhandler.TaskHandler
-
+	TeamHandler *teamHandler.TeamHandler
 	//Config
 	JWTConfig *jwttoken.Config
 }
@@ -55,13 +57,15 @@ func NewApplication(pool *pgxpool.Pool) *Application {
 	userStore := userstore.NewPGUserStore(pool)
 	taskStore := taskstore.NewPGTaskStore(pool)
 	refreshTokenStore := refreshtoken.NewPGRefreshTokenStore(pool)
+	teamStore := teamstore.NewPGTeamStore(pool)
 
 	//create middleware
 	authMiddleware := authmiddleware.NewAuthMiddleware(jwtManager)
 
 	//create handlers
 	authHandler := authhandler.NewAuthHandler(userStore, refreshTokenStore, jwtManager)
-	taskHandler := taskhandler.NewTaskHandler(taskStore)
+	taskHandler := taskhandler.NewTaskHandler(taskStore, teamStore)
+	teamHandler := teamHandler.NewTeamHandler(teamStore, userStore)
 
 	return &Application{
 		UserStore:         userStore,
@@ -71,6 +75,7 @@ func NewApplication(pool *pgxpool.Pool) *Application {
 		AuthMiddleware:    authMiddleware,
 		AuthHandler:       authHandler,
 		TaskHandler:       taskHandler,
+		TeamHandler:       teamHandler,
 		JWTConfig:         jwtConfig,
 	}
 }

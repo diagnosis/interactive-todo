@@ -6,12 +6,13 @@ import {describe} from "node:test";
 import {AuthClient} from "../src/clients/authClient";
 
 
-const uniqueEmail = (prefix:string)=> `${prefix}-${Date.now()}@example.com`
+
 
 test.describe("Authentication - Happy Path", ()=>{
 
     test("successful register return user data", async ( {authClient})=>{
         const email = uniqueEmail("test")
+
         const result = await authClient.register(email, process.env.COMMON_PASS)
         expect(result.status).toBe(201)
         validateRegisterData(result.data)
@@ -184,4 +185,24 @@ function validateLoginData(result:LoginResponse){
 function validateError(result:ErrorResponse,code:string, message:string){
     expect(code).toBe(result.code)
     expect(message).toBe(result.message)
+}
+
+const uniqueEmail = (prefix: string) =>
+    `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}@example.com`;
+
+async function registerAndLogin(authClient: AuthClient) {
+    const email = uniqueEmail("teamuser");
+    const password = process.env.COMMON_PASS!;
+    const register = await authClient.register(email, password);
+    expect(register.status).toBe(201);
+
+    const login = await authClient.login(email, password);
+    expect(login.status).toBe(200);
+
+    return {
+        email,
+        password,
+        token: login.data.access_token,
+        userId: login.data.user.id,
+    };
 }

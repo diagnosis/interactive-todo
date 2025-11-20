@@ -20,7 +20,11 @@ export const TEST_USERS = {
     outsider: {
         email: "outsider@example.com",
         password: "Test1234"
-    }
+    },
+    taskManager:{
+    "email":"test-manager@example.com",
+        "password":"Test1234"
+    },
 }
 
 
@@ -35,3 +39,4 @@ export async function loginTestUser(authClient :AuthClient, userKey: keyof typeo
         userId: result.data.user.id
     }
 }
+

@@ -34,6 +34,7 @@ type UserStore interface {
 	GetUserByEmail(ctx context.Context, email string) (*User, error)
 	UpdatePassword(ctx context.Context, id uuid.UUID, newPassword string, now time.Time) error
 	ListAll(ctx context.Context) ([]User, error)
+	UpdateUserType(ctx context.Context, userID uuid.UUID, userType UserType) (*User, error)
 }
 type PGUserStore struct {
 	Pool *pgxpool.Pool
@@ -47,6 +48,28 @@ var (
 	ErrDuplicatedEmail = errors.New("email already exists")
 	ErrNotFound        = errors.New("not found")
 )
+
+func (s *PGUserStore) UpdateUserType(ctx context.Context, userID uuid.UUID, userType UserType) (*User, error) {
+	const q = `
+        UPDATE users
+        SET user_type = $2
+        WHERE id = $1
+        RETURNING email, updated_at;
+    `
+	var out User
+	out.ID = userID
+	out.UserType = userType
+
+	err := s.Pool.QueryRow(ctx, q, userID, userType).
+		Scan(&out.Email, &out.UpdatedAt)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrNotFound
+		}
+		return nil, err
+	}
+	return &out, nil
+}
 
 func (s *PGUserStore) Create(ctx context.Context, email, hashedPassword string, userType UserType, now time.Time) (*User, error) {
 	//generate passwordHash

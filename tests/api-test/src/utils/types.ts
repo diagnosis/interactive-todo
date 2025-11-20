@@ -37,6 +37,7 @@ export interface TaskListResponse {
 }
 export interface TaskResponse {
     id: string;
+    team_id: string;        // 🔴 add this to match backend JSON
     title: string;
     description: string;
     reporter_id: string;
@@ -48,8 +49,60 @@ export interface TaskResponse {
 }
 
 export interface CreateTaskData {
+    team_id: string;        // 🔴 NEW – required by backend
     title: string;
     description?: string;
     assignee_id?: string;
     due_at: string;
+}
+
+
+export interface TeamResponse {
+    id: string;
+    name: string;
+    owner_id: string;
+    created_at: string;
+    updated_at: string;
+}
+export interface TeamListResponse {
+    team_id?: string;
+    teams: TeamResponse[];
+}
+
+export type TeamRole = "owner" | "admin" | "member";
+
+export interface TeamMember {
+    team_id: string;
+    user_id: string;
+    role: TeamRole;
+    created_at: string;
+}
+
+export interface TeamMembersResponse {
+    team_id: string;
+    members: TeamMember[];
+}
+
+export interface BasicUser {
+    id: string;
+    email: string;
+    user_type: string;
+    created_at?: string;
+    updated_at?: string;
+}
+
+export interface AddMemberResponse {
+    teamID: string;
+    member: BasicUser;
+}
+export interface RemoveMemberResponse {
+    message: string;
+    team_id: string;
+    user_id: string;
+}
+
+export interface TeamTaskListResponse {
+    user_id: string;
+    team_id: string;
+    tasks: TaskResponse[];
 }
