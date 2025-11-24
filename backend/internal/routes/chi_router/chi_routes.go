@@ -48,6 +48,7 @@ func SetupRouter(application *app.Application) *chi.Mux {
 	r.Route("/users", func(ur chi.Router) {
 		ur.Use(application.AuthMiddleware.RequireAuth)
 		ur.Get("/", application.AuthHandler.ListUsers)
+		ur.Get("/search", application.AuthHandler.SearchUsers)
 	})
 
 	// ===== Teams (protected) =====

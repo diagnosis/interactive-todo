@@ -142,8 +142,10 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 
 	var in struct {
-		Email    string `json:"email"`
-		Password string `json:"password"`
+		Email        string `json:"email"`
+		Password     string `json:"password"`
+		DisplayName  string `json:"display_name"`
+		WantsManager bool   `json:"wants_manager"`
 	}
 
 	dec := json.NewDecoder(r.Body)
@@ -157,6 +159,7 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 
 	email := strings.TrimSpace(strings.ToLower(in.Email))
 	password := strings.TrimSpace(in.Password)
+	displayName := strings.TrimSpace(in.DisplayName)
 
 	if len(email) < 4 || !strings.Contains(email, "@") {
 		logger.Info(ctx, "register: invalid email", "email", email)
@@ -168,6 +171,17 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 		helper.RespondError(w, r, apperror.BadRequest("Password must be at least 8 characters"))
 		return
 	}
+	if len(displayName) < 3 {
+		logger.Info(ctx, "register: display_name too short")
+		helper.RespondError(w, r, apperror.BadRequest("display name must be at least 3 characters"))
+		return
+	}
+
+	// 👇 decide the initial user type
+	userType := userstore.TypeEmployee
+	if in.WantsManager {
+		userType = userstore.TypeTaskManager
+	}
 
 	passwordHash, err := secure.HashPassword(password)
 	if err != nil {
@@ -177,7 +191,7 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	}
 
 	now := time.Now().UTC()
-	created, err := h.userStore.Create(ctx, email, passwordHash, userstore.TypeEmployee, now)
+	created, err := h.userStore.Create(ctx, email, passwordHash, userType, &displayName, now)
 	if err != nil {
 		if errors.Is(err, userstore.ErrDuplicatedEmail) {
 			logger.Info(ctx, "register: email already exists", "email", email)
@@ -196,10 +210,11 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	)
 
 	response := map[string]any{
-		"user_id":    created.ID,
-		"email":      created.Email,
-		"user_type":  created.UserType,
-		"created_at": created.CreatedAt,
+		"user_id":      created.ID,
+		"email":        created.Email,
+		"user_type":    created.UserType,
+		"display_name": created.DisplayName,
+		"created_at":   created.CreatedAt,
 	}
 	helper.RespondJSON(w, r, http.StatusCreated, response)
 }
@@ -306,9 +321,10 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		"token_type":   "Bearer",
 		"expires_in":   int((15 * time.Minute).Seconds()),
 		"user": map[string]any{
-			"id":    user.ID,
-			"email": user.Email,
-			"type":  user.UserType,
+			"id":           user.ID,
+			"email":        user.Email,
+			"type":         user.UserType,
+			"display_name": user.DisplayName,
 		},
 	}
 	helper.RespondJSON(w, r, http.StatusOK, response)
@@ -375,9 +391,10 @@ func (h *AuthHandler) RefreshAccessToken(w http.ResponseWriter, r *http.Request)
 		"token_type":   "Bearer",
 		"expires_in":   int((15 * time.Minute).Seconds()),
 		"user": map[string]any{
-			"id":    user.ID,
-			"email": user.Email,
-			"type":  user.UserType,
+			"id":           user.ID,
+			"email":        user.Email,
+			"type":         user.UserType,
+			"display_name": user.DisplayName,
 		},
 	}
 	helper.RespondJSON(w, r, http.StatusOK, response)
@@ -468,6 +485,56 @@ func (h *AuthHandler) ListUsers(w http.ResponseWriter, r *http.Request) {
 
 	logger.Info(ctx, "list users: success", "count", len(users))
 	helper.RespondJSON(w, r, http.StatusOK, response)
+}
+
+// =====================
+//  Search User
+// =====================
+
+func (h *AuthHandler) SearchUsers(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	defer cancel()
+
+	userID, ok := middleware.GetUserIDFromContext(ctx)
+	if !ok {
+		helper.RespondError(w, r, apperror.Unauthorized("unauthorized"))
+		return
+	}
+	me, err := h.userStore.GetUserByID(ctx, userID)
+	if err != nil {
+		helper.RespondError(w, r, apperror.InternalError("internal error", err))
+		return
+	}
+
+	if me.UserType != userstore.TypeAdmin && me.UserType != userstore.TypeTaskManager {
+		helper.RespondError(w, r, apperror.Forbidden("forbidden"))
+		return
+	}
+
+	q := strings.TrimSpace(r.URL.Query().Get("q"))
+	if len(q) < 2 {
+		helper.RespondError(w, r, apperror.BadRequest("query must be at least 2 characters"))
+		return
+	}
+
+	users, err := h.userStore.Search(ctx, q, 10)
+	if err != nil {
+		helper.RespondError(w, r, apperror.InternalError("internal error", err))
+		return
+	}
+
+	out := make([]map[string]any, len(users))
+	for i, u := range users {
+		out[i] = map[string]any{
+			"id":           u.ID,
+			"email":        u.Email,
+			"display_name": u.DisplayName,
+		}
+	}
+	helper.RespondJSON(w, r, http.StatusOK, map[string]any{
+		"users": out,
+	})
+
 }
 
 // =====================
@@ -571,3 +638,5 @@ func (h *AuthHandler) rotateRefresh(w http.ResponseWriter, r *http.Request, oldT
 	setRefreshTokenCookie(w, refreshToken)
 	return nil
 }
+
+///

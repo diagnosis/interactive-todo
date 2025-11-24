@@ -50,7 +50,7 @@ backend/
 - Access token: 15-minute expiry
 - Refresh token: 7-day expiry with device tracking
 - Secure password hashing using Argon2id
-- User types: Regular, Task Manager, Admin
+- User types: Employee, Task Manager, Admin
 - IP address tracking for security
 
 ### Team Management
@@ -237,17 +237,17 @@ type TeamMember struct {
 ### Task
 ```go
 type Task struct {
-    ID             uuid.UUID
-    TeamID         uuid.UUID
-    Title          string
-    Description    *string
-    ReporterID     uuid.UUID  // Task creator
-    AssigneeID     uuid.UUID  // Task assignee
-    DueAt          time.Time
-    ReminderSentAt *time.Time
-    Status         TaskStatus  // "open", "in_progress", "done", "canceled"
-    CreatedAt      time.Time
-    UpdatedAt      time.Time
+ID             uuid.UUID
+TeamID         uuid.UUID
+Title          string
+Description    *string
+ReporterID     uuid.UUID
+AssigneeID     *uuid.UUID  // optional
+DueAt          time.Time
+ReminderSentAt *time.Time
+Status         TaskStatus  // "open", "in_progress", "done", "canceled"
+CreatedAt      time.Time
+UpdatedAt      time.Time
 }
 ```
 
@@ -284,9 +284,9 @@ The API uses consistent error responses:
 ```json
 {
   "error": {
-    "type": "validation_error",
-    "message": "Invalid request parameters",
-    "details": "title length must be between 1 and 100"
+    "code": "BAD_REQUEST",
+    "message": "Password must be at least 8 characters",
+    "timestamp": "2025-11-20T03:21:45Z"
   }
 }
 ```
@@ -384,7 +384,7 @@ When contributing to the backend:
 
 ## License
 
-[Your License Here]
+MIT Licence
 
 ## Support
 
