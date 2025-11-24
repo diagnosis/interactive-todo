@@ -1,13 +1,13 @@
-// src/components/dashboard/TeamTasks.tsx
 import { useState, useMemo } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
-import { taskClient } from "../../api/taskClient"
-import type { Task, TeamMember } from "../../types/taskAndTeam"
-import { TaskRow } from "../task/TaskRow"
-import { TaskDetailsModal } from "../task/TaskDetailsModal"
-import { CreateTaskModal } from "../task/CreateTaskModal"
-import { EditTaskModal } from "../task/EditTaskModal"
-import {teamClient} from "../../api/teamClient.ts";
+import { taskClient } from "../../../api/taskClient"
+import { teamClient } from "../../../api/teamClient"
+import type { Task, TeamMember } from "../../../types/taskAndTeam"
+import { TaskRow } from "./TaskRow"
+import { TaskDetailsModal } from "./TaskDetailsModal"
+import { CreateTaskModal } from "./CreateTaskModal"
+import { EditTaskModal } from "./EditTaskModal"
+import { Button } from "../../../shared/components/Button"
 
 interface TeamTasksProps {
     teamId: string | null
@@ -19,7 +19,6 @@ export function TeamTasks({ teamId }: TeamTasksProps) {
     const [viewTask, setViewTask] = useState<Task | null>(null)
     const [editTask, setEditTask] = useState<Task | null>(null)
 
-    // tasks
     const { data: tasksResp } = useQuery({
         queryKey: ["tasks", teamId],
         queryFn: () => taskClient.listTeamTasks(teamId!),
@@ -28,7 +27,6 @@ export function TeamTasks({ teamId }: TeamTasksProps) {
 
     const tasks: Task[] = tasksResp?.data?.tasks ?? []
 
-    // team members – you already have listMembers via teamClient
     const { data: membersResp } = useQuery({
         queryKey: ["team-members", teamId],
         queryFn: () => teamClient.listMembers(teamId!),
@@ -56,29 +54,44 @@ export function TeamTasks({ teamId }: TeamTasksProps) {
 
     if (!teamId) {
         return (
-            <div className="flex-1 flex items-center justify-center text-sm text-slate-500">
-                Select a team to view tasks
+            <div className="flex-1 flex flex-col items-center justify-center text-center p-12">
+                <div className="w-24 h-24 bg-gradient-to-br from-blue-100 to-cyan-100 rounded-full flex items-center justify-center mb-6">
+                    <svg className="w-12 h-12 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                    </svg>
+                </div>
+                <h3 className="text-xl font-bold text-slate-800 mb-2">Select a Team</h3>
+                <p className="text-slate-600">Choose a team from the sidebar to view and manage tasks</p>
             </div>
         )
     }
 
     return (
-        <section className="flex-1 flex flex-col px-6 py-4">
-            <header className="mb-3 flex items-center justify-between">
-                <h2 className="text-lg font-semibold text-slate-800">Tasks</h2>
-                <button
+        <section className="flex-1 flex flex-col px-8 py-6">
+            <header className="mb-6 flex items-center justify-between">
+                <div>
+                    <h2 className="text-2xl font-bold text-slate-800">Tasks</h2>
+                    <p className="text-sm text-slate-600 mt-1">Manage your team's tasks and assignments</p>
+                </div>
+                <Button
                     type="button"
                     onClick={() => setIsCreateOpen(true)}
-                    className="rounded-md bg-indigo-600 px-4 py-2 text-xs font-medium text-white hover:bg-indigo-700"
+                    size="md"
                 >
-                    +add task
-                </button>
+                    + Add Task
+                </Button>
             </header>
 
             {tasks.length === 0 ? (
-                <p className="text-sm text-slate-500">No tasks yet.</p>
+                <div className="flex flex-col items-center justify-center p-12 bg-slate-50 rounded-2xl border-2 border-dashed border-slate-300">
+                    <svg className="w-16 h-16 text-slate-400 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                    </svg>
+                    <p className="text-slate-600 font-medium">No tasks yet</p>
+                    <p className="text-sm text-slate-500 mt-1">Create your first task to get started</p>
+                </div>
             ) : (
-                <div className="space-y-2">
+                <div className="space-y-3">
                     {tasks.map((task) => (
                         <TaskRow
                             key={task.id}
@@ -94,7 +107,6 @@ export function TeamTasks({ teamId }: TeamTasksProps) {
                 </div>
             )}
 
-            {/* Modals */}
             <CreateTaskModal
                 open={isCreateOpen}
                 onClose={() => setIsCreateOpen(false)}

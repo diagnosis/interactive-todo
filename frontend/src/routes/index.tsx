@@ -1,9 +1,9 @@
 import { createFileRoute, redirect } from '@tanstack/react-router'
-import { useQuery} from "@tanstack/react-query";
-import {teamClient} from "../api/teamClient.ts";
-import {Aside} from "../components/layout/sidebar.tsx";
-import {useState} from "react";
-import { TeamTasks } from "../components/dashboard/TeamTasks.tsx";
+import { useQuery } from "@tanstack/react-query"
+import { teamClient } from "../api/teamClient"
+import { Sidebar } from "../features/teams/components/Sidebar"
+import { useState } from "react"
+import { TeamTasks } from "../features/tasks/components/TeamTasks"
 
 export const Route = createFileRoute('/')({
   beforeLoad: async () => {
@@ -50,15 +50,15 @@ function DashboardPage() {
   const useDropdown = teams.length > 5
 
   return (
-      <div className="flex h-full">
-        <Aside
-            teams={teams}
-            useDropdown={useDropdown}
-            selectedTeamId={selectedTeamId}
-            setSelectedTeamId={setSelectedTeamId}
-        />
+    <div className="flex h-full min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
+      <Sidebar
+        teams={teams}
+        useDropdown={useDropdown}
+        selectedTeamId={selectedTeamId}
+        setSelectedTeamId={setSelectedTeamId}
+      />
 
-        <TeamTasks teamId={selectedTeamId} />
-      </div>
+      <TeamTasks teamId={selectedTeamId} />
+    </div>
   )
 }

@@ -1,14 +1,13 @@
-// src/components/task/AddMemberModal.tsx
 import { useState } from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
-import { Modal } from "../ui/Modal"
-import { PrimaryButton } from "../ui/buttons"
-import { teamClient } from "../../api/teamClient"
-import { userClient } from "../../api/userClient"
-import type { TeamMemberRequest, TeamRole } from "../../types/taskAndTeam"
-import type { UserOption, UserSearchResponse } from "../../types/auth"
-import {useDebounce} from "../../hooks/debounce.ts";
-
+import { Modal } from "../../../shared/components/Modal"
+import { Button } from "../../../shared/components/Button"
+import { Input } from "../../../shared/components/Input"
+import { teamClient } from "../../../api/teamClient"
+import { userClient } from "../../../api/userClient"
+import type { TeamMemberRequest, TeamRole } from "../../../types/taskAndTeam"
+import type { UserOption, UserSearchResponse } from "../../../types/auth"
+import { useDebounce } from "../../../hooks/debounce"
 
 interface AddMemberModalProps {
     isOpen: boolean
@@ -17,10 +16,10 @@ interface AddMemberModalProps {
 }
 
 export function AddMemberModal({
-                                   isOpen,
-                                   onClose,
-                                   teamId,
-                               }: AddMemberModalProps) {
+    isOpen,
+    onClose,
+    teamId,
+}: AddMemberModalProps) {
     const [search, setSearch] = useState("")
     const [selectedUser, setSelectedUser] = useState<UserOption | null>(null)
     const [role, setRole] = useState<TeamRole>("member")
@@ -83,31 +82,31 @@ export function AddMemberModal({
         <Modal
             isOpen={isOpen && !!teamId}
             onClose={onClose}
-            title="Add team member"
+            title="Add Team Member"
             maxWidthClass="max-w-lg"
             footer={
                 <>
-                    <button
+                    <Button
                         type="button"
                         onClick={onClose}
-                        className="rounded-md border border-slate-300 px-3 py-1 text-xs text-slate-700 hover:bg-slate-50"
+                        variant="secondary"
                     >
                         Cancel
-                    </button>
-                    <PrimaryButton
+                    </Button>
+                    <Button
                         type="submit"
                         loading={mutation.isPending}
-                        click={handleSubmit as any}
+                        onClick={handleSubmit}
                     >
-                        Add
-                    </PrimaryButton>
+                        Add Member
+                    </Button>
                 </>
             }
         >
-            <form className="space-y-3" onSubmit={handleSubmit}>
-                <div className="space-y-1">
-                    <label className="text-xs font-medium text-slate-600">
-                        Search user (email or name)
+            <form className="space-y-4" onSubmit={handleSubmit}>
+                <div className="space-y-2">
+                    <label className="text-sm font-semibold text-slate-700">
+                        Search User
                     </label>
                     <input
                         type="text"
@@ -116,55 +115,54 @@ export function AddMemberModal({
                             setSearch(e.target.value)
                             setSelectedUser(null)
                         }}
-                        className="w-full rounded-md border border-slate-300 px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                        placeholder="Type at least 2 characters…"
+                        className="w-full rounded-lg border-2 border-slate-200 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
+                        placeholder="Type at least 2 characters (email or name)"
                     />
 
-                    {/* dropdown */}
                     {search.trim().length >= 2 && candidates.length > 0 && !selectedUser && (
-                        <ul className="mt-1 max-h-40 overflow-y-auto rounded-md border border-slate-200 bg-white shadow-sm text-sm">
+                        <ul className="mt-2 max-h-48 overflow-y-auto rounded-lg border-2 border-slate-200 bg-white shadow-lg">
                             {candidates.map((u) => (
                                 <li
                                     key={u.id}
-                                    className="px-3 py-1.5 hover:bg-slate-100 cursor-pointer flex justify-between"
+                                    className="px-4 py-3 hover:bg-blue-50 cursor-pointer flex justify-between items-center transition-colors border-b border-slate-100 last:border-b-0"
                                     onClick={() => {
                                         setSelectedUser(u)
                                         setSearch(u.display_name || u.email)
                                     }}
                                 >
-                  <span className="truncate">
-                    {u.display_name ?? u.email}
-                  </span>
+                                    <span className="truncate font-medium text-slate-800">
+                                        {u.display_name ?? u.email}
+                                    </span>
                                     <span className="ml-2 text-xs text-slate-500">
-                    {u.email}
-                  </span>
+                                        {u.email}
+                                    </span>
                                 </li>
                             ))}
                         </ul>
                     )}
 
                     {search.trim().length >= 2 && candidates.length === 0 && (
-                        <p className="mt-1 text-[11px] text-slate-500">
+                        <p className="mt-2 text-sm text-slate-500 bg-slate-50 rounded-lg p-3 border border-slate-200">
                             No users found.
                         </p>
                     )}
 
                     {selectedUser && (
-                        <p className="mt-1 text-[11px] text-slate-600">
+                        <p className="mt-2 text-sm text-emerald-700 bg-emerald-50 rounded-lg p-3 border border-emerald-200">
                             Selected:{" "}
-                            <span className="font-medium">
-                {selectedUser.display_name ?? selectedUser.email}
-              </span>
+                            <span className="font-semibold">
+                                {selectedUser.display_name ?? selectedUser.email}
+                            </span>
                         </p>
                     )}
                 </div>
 
-                <div className="space-y-1">
-                    <label className="text-xs font-medium text-slate-600">
+                <div className="space-y-2">
+                    <label className="text-sm font-semibold text-slate-700">
                         Role
                     </label>
                     <select
-                        className="w-full rounded-md border border-slate-300 px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                        className="w-full rounded-lg border-2 border-slate-200 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 bg-white transition-colors"
                         value={role}
                         onChange={(e) => setRole(e.target.value as TeamRole)}
                     >
@@ -175,7 +173,7 @@ export function AddMemberModal({
                 </div>
 
                 {errMsg && (
-                    <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded px-2 py-1">
+                    <p className="text-sm text-red-600 bg-red-50 border-2 border-red-200 rounded-lg px-4 py-3">
                         {errMsg}
                     </p>
                 )}
