@@ -32,7 +32,7 @@ export const teamClient = {
     },
 
     // DELETE /teams/{team_id}/members/{user_id}
-    deleteMember: async (
+    removeMember: async (
         team_id: string,
         user_id: string
     ): Promise<ApiResponse<RemovedMemberResponse>> =>

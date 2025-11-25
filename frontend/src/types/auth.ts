@@ -41,3 +41,10 @@ export interface UserOption {
 export interface UserSearchResponse {
     users: UserOption[]
 }
+export interface ProfileUpdatePayload{
+    display_name?: string | null
+}
+export interface UpdatePasswordPayload{
+    current_password: string;
+    password: string;
+}

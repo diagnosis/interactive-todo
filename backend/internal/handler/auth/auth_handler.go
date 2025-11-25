@@ -538,6 +538,142 @@ func (h *AuthHandler) SearchUsers(w http.ResponseWriter, r *http.Request) {
 }
 
 // =====================
+//
+//	UpdateProfile
+//
+// =====================
+func (h *AuthHandler) HandleProfile(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	defer cancel()
+
+	userID, ok := middleware.GetUserIDFromContext(ctx)
+	if !ok {
+		helper.RespondError(w, r, apperror.Unauthorized("unauthorized"))
+		return
+	}
+
+	var in struct {
+		DisplayName *string `json:"display_name"`
+	}
+
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
+	defer r.Body.Close()
+
+	dec := json.NewDecoder(r.Body)
+	dec.DisallowUnknownFields()
+
+	if err := dec.Decode(&in); err != nil {
+		helper.RespondError(w, r, apperror.BadRequest("bad request body"))
+		return
+	}
+
+	upd := userstore.ProfileUpdate{}
+
+	if in.DisplayName != nil {
+		trimmed := strings.TrimSpace(*in.DisplayName)
+		if len(trimmed) < 2 {
+			helper.RespondError(w, r, apperror.BadRequest("display_name must be at least 2 chars"))
+			return
+		}
+		upd.DisplayName = &trimmed
+	}
+
+	now := time.Now().UTC()
+	updated, err := h.userStore.UpdateProfile(ctx, userID, upd, now)
+	if err != nil {
+		if errors.Is(err, userstore.ErrNotFound) {
+			helper.RespondError(w, r, apperror.NotFound("user not found"))
+			return
+		}
+		helper.RespondError(w, r, apperror.InternalError("internal error", err))
+		return
+	}
+
+	helper.RespondJSON(w, r, http.StatusOK, map[string]any{
+		"user": map[string]any{
+			"id":           updated.ID,
+			"email":        updated.Email,
+			"display_name": updated.DisplayName,
+			"user_type":    updated.UserType,
+		},
+	})
+}
+
+// =====================
+//
+//	UpdatePassword
+//
+// =====================
+func (h *AuthHandler) HandleUpdatePassword(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	defer cancel()
+
+	userID, ok := middleware.GetUserIDFromContext(ctx)
+	if !ok {
+		helper.RespondError(w, r, apperror.Unauthorized("unauthorized"))
+		return
+	}
+
+	var in struct {
+		CurrentPassword string `json:"current_password"`
+		NewPassword     string `json:"password"`
+	}
+
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
+	dec := json.NewDecoder(r.Body)
+	dec.DisallowUnknownFields()
+
+	err := dec.Decode(&in)
+	if err != nil {
+		helper.RespondError(w, r, apperror.BadRequest("bad request body"))
+		return
+	}
+	trimmedPass := strings.TrimSpace(in.NewPassword)
+	trimmedCurrentPass := strings.TrimSpace(in.CurrentPassword)
+
+	if len(trimmedPass) < 8 {
+		helper.RespondError(w, r, apperror.BadRequest("invalid password length password must be at least 8 chars"))
+		return
+	}
+	hashedNewPass, err := secure.HashPassword(trimmedPass)
+	if err != nil {
+		helper.RespondError(w, r, apperror.InternalError("unable to hash password", err))
+		return
+	}
+
+	// validate current pass then update
+	user, err := h.userStore.GetUserByID(ctx, userID)
+	if err != nil {
+		if errors.Is(err, userstore.ErrNotFound) {
+			helper.RespondError(w, r, apperror.NotFound("user not found"))
+			return
+		}
+		helper.RespondError(w, r, apperror.InternalError("internal error", err))
+		return
+	}
+	verify, err := secure.VerifyPassword(trimmedCurrentPass, user.PasswordHash)
+	if err != nil {
+		helper.RespondError(w, r, apperror.InternalError("internal error", err))
+		return
+	}
+	if !verify {
+		helper.RespondError(w, r, apperror.BadRequest("password is not matching"))
+		return
+	}
+
+	if err = h.userStore.UpdatePassword(ctx, userID, hashedNewPass, time.Now().UTC()); err != nil {
+		helper.RespondError(w, r, apperror.InternalError("internal error", err))
+		return
+	}
+
+	helper.RespondJSON(w, r, http.StatusOK, map[string]any{
+		"userID":  userID,
+		"message": "password has been updated!",
+	})
+
+}
+
+// =====================
 //  Token cleanup (cron-ish)
 // =====================
 

@@ -12,14 +12,22 @@ export function LoginForm() {
     const navigate = useNavigate()
     const { login, isLoggingIn } = useAuth()
 
-    const onSubmit = async (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault()
         setErrMsg(null)
         try {
-            await login(email.trim(), password.trim())
-            navigate({ to: '/' })
+            const user = await login(email, password)
+            if (!user) {
+                setErrMsg("Login failed")
+                return
+            }
+            if (!user.display_name) {
+                navigate({ to: "/profile" })
+            } else {
+                navigate({ to: "/" })
+            }
         } catch (err: any) {
-            setErrMsg(err.message ?? 'Login failed')
+            setErrMsg(err.message ?? "Login failed")
         }
     }
 
@@ -38,7 +46,7 @@ export function LoginForm() {
                 </div>
             )}
 
-            <form className="space-y-5" onSubmit={onSubmit}>
+            <form className="space-y-5" onSubmit={handleSubmit}>
                 <Input
                     label="Email"
                     type="email"

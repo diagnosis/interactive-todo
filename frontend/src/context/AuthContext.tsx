@@ -35,10 +35,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             }
             if (res.data?.user) {
                 setUser(res.data.user)
-            } else {
-                // fallback from localStorage if needed
-                setUser(getCurrentUser())
+                return res.data.user
             }
+            const fallback = getCurrentUser()
+            setUser(fallback)
+            return fallback
         } finally {
             setIsLoggingIn(false)
         }

@@ -1,4 +1,5 @@
 interface InputProps {
+    disabled?: boolean
     label?: string
     type?: string
     value: string
@@ -7,6 +8,7 @@ interface InputProps {
     required?: boolean
     error?: string
     helperText?: string
+
 }
 
 export const Input = (props: InputProps) => {
@@ -19,6 +21,7 @@ export const Input = (props: InputProps) => {
                 </label>
             )}
             <input
+                disabled={props.disabled}
                 type={props.type ?? "text"}
                 value={props.value}
                 onChange={e => props.onChange(e.target.value)}
