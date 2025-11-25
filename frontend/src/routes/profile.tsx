@@ -1,4 +1,4 @@
-import {createFileRoute, redirect} from '@tanstack/react-router'
+import {createFileRoute, redirect, useNavigate} from '@tanstack/react-router'
 import {useAuth} from "../context/AuthContext.tsx";
 import { useState } from "react";
 import {useMutation} from "@tanstack/react-query";
@@ -20,12 +20,14 @@ export const Route = createFileRoute('/profile')({
 
 function ProfilePage() {
     const {user, logout} = useAuth()
+    const navigate = useNavigate()
     const [displayName, setDisplayName] = useState(user?.display_name ?? "")
     const [currentPassword, setCurrentPassword] = useState("")
     const [newPassword, setNewPassword] = useState("")
     const [profileErr, setProfileErr] = useState<string| null>(null)
     const [passwordErr, setPasswordErr] =useState<string | null>(null)
     const [passwordMsg, setPasswordMsg] = useState<string | null>(null)
+    const mustSetName = !user?.display_name
 
     const profileMutation =useMutation({
         mutationFn: () => userClient.updateProfile({display_name: displayName.trim()}),
@@ -39,6 +41,10 @@ function ProfilePage() {
             if (updatedUser){
                 localStorage.setItem("current_user", JSON.stringify(updatedUser))
                 window.dispatchEvent(new StorageEvent("storage",  {key: "current_user"}))
+
+                if (mustSetName) {
+                    navigate({ to: '/' })
+                }
             }
         }
     })
@@ -58,7 +64,7 @@ function ProfilePage() {
             setNewPassword("")
         }
     })
-    const mustSetName = !user?.display_name
+
     return (
         <div className="flex-1 flex justify-center py-12 px-4 bg-gradient-to-br from-slate-50 to-slate-100 min-h-screen">
             <div className="w-full max-w-2xl space-y-8">

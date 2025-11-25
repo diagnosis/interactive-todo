@@ -14,6 +14,8 @@ export function Header() {
         navigate({ to: '/login' })
     }
 
+    const isAuthenticated = !!user || !!localStorage.getItem('access_token')
+
     return (
         <header className="flex items-center justify-between px-6 py-4 bg-white/90 backdrop-blur-md border-b border-slate-200/50 shadow-sm sticky top-0 z-40">
             <Link to="/" className="flex items-center gap-3">
@@ -28,7 +30,7 @@ export function Header() {
                 </div>
             </Link>
 
-            {user && (
+            {isAuthenticated && (
                 <nav className="flex items-center gap-3">
                     <Link
                         to="/"
