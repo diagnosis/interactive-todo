@@ -2,7 +2,6 @@ import {test} from "../src/fixtures/clients";
 import {expect} from "@playwright/test";
 import {ErrorResponse, LoginResponse, RegisterResponse} from "../src/utils/types";
 import {loginTestUser, TEST_USERS} from "./testUsers";
-import {describe} from "node:test";
 import {AuthClient} from "../src/clients/authClient";
 
 
@@ -12,14 +11,16 @@ test.describe("Authentication - Happy Path", ()=>{
 
     test("successful register return user data", async ( {authClient})=>{
         const email = uniqueEmail("test")
+        const displayName = uniqueName("test")
 
-        const result = await authClient.register(email, process.env.COMMON_PASS)
+        const result = await authClient.register(email, process.env.COMMON_PASS, displayName)
         expect(result.status).toBe(201)
         validateRegisterData(result.data)
     })
     test('successful login returns access token and valid status', async({authClient})=>{
         const email = uniqueEmail("test")
-        const registerResult = await authClient.register(email, process.env.COMMON_PASS)
+        const displayName = uniqueName("test")
+        const registerResult = await authClient.register(email, process.env.COMMON_PASS, displayName )
         expect(registerResult.status).toBe(201)
         const loginResult = await authClient.login(email, process.env.COMMON_PASS)
         expect(loginResult.status).toBe(200)
@@ -29,26 +30,29 @@ test.describe("Authentication - Happy Path", ()=>{
 test.describe("Authentication - Validation Errors", () => {
 
     test("register fails with short password", async ({ authClient }) => {
+        const displayName = uniqueName("test")
         const email = uniqueEmail("test")
-        const result = await authClient.register(email, "63636")
+        const result = await authClient.register(email, "63636", displayName)
         expect(result.status).toBe(400)
         expect(result.error.timestamp).toBeTruthy()
         validateError(result.error,"BAD_REQUEST", "Password must be at least 8 characters")
     });
 
     test("register fails with invalid email format", async ({ authClient }) => {
+        const displayName = uniqueName("test")
         const email = "hacer2gmail.com"
-        const result = await authClient.register(email, process.env.COMMON_PASS)
+        const result = await authClient.register(email, process.env.COMMON_PASS, displayName)
         expect(result.status).toBe(400)
         expect(result.error.timestamp).toBeTruthy()
         validateError(result.error,"BAD_REQUEST", "Invalid email address")
     });
 
     test("register fails with duplicate email", async ({ authClient }) => {
+        const displayName = uniqueName("test")
         const email = uniqueEmail("test")
-        const result = await authClient.register(email, process.env.COMMON_PASS)
+        const result = await authClient.register(email, process.env.COMMON_PASS, displayName)
         expect(result.status).toBe(201)
-        const secondRegister = await authClient.register(email, process.env.COMMON_PASS)
+        const secondRegister = await authClient.register(email, process.env.COMMON_PASS, displayName)
         expect(secondRegister.status).toBe(409)
         validateError(secondRegister.error, "EMAIL_ALREADY_EXISTS", "Email address already registered")
 
@@ -56,7 +60,8 @@ test.describe("Authentication - Validation Errors", () => {
 
     test("login fails with wrong password", async ({ authClient }) => {
         const email = uniqueEmail("test")
-        const result = await authClient.register(email, process.env.COMMON_PASS)
+        const displayName = uniqueName("test")
+        const result = await authClient.register(email, process.env.COMMON_PASS, displayName)
         expect(result.status).toBe(201)
         const wrongPassword = await authClient.login(email, "WrongPass44")
         expect(wrongPassword.status).toBe(401)
@@ -71,7 +76,7 @@ test.describe("Authentication - Validation Errors", () => {
     });
 
 });
-describe("Token refresh", ()=> {
+test.describe("Token refresh", ()=> {
     test("can refresh with valid refresh token", async({ authClient})=>{
         await authClient.login(TEST_USERS.reporter.email,
             TEST_USERS.reporter.password)
@@ -189,11 +194,13 @@ function validateError(result:ErrorResponse,code:string, message:string){
 
 const uniqueEmail = (prefix: string) =>
     `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}@example.com`;
+const uniqueName = (prefix: string) => `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`
 
 async function registerAndLogin(authClient: AuthClient) {
     const email = uniqueEmail("teamuser");
+    const displayName = uniqueName("test")
     const password = process.env.COMMON_PASS!;
-    const register = await authClient.register(email, password);
+    const register = await authClient.register(email, password, displayName);
     expect(register.status).toBe(201);
 
     const login = await authClient.login(email, password);

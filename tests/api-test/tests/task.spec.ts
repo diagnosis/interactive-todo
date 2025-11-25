@@ -10,6 +10,7 @@ const uniqueTeamName = (prefix: string) =>
     `${prefix}-team-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 const currentISODate = (date: number, days: number) =>
     new Date(date + 24 * 60 * 60 * 1000 * days).toISOString();
+const uniqueName = (prefix: string) => `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`
 
 test.describe("Tasks - CRUD Operations", () => {
     test("user can create task", async ({ taskClient, authClient, teamClient }) => {
@@ -25,7 +26,7 @@ test.describe("Tasks - CRUD Operations", () => {
         // 2) register & login a fresh user
         const email = uniqueEmail("test");
         const password = process.env.COMMON_PASS!;
-        const reg = await authClient.register(email, password);
+        const reg = await authClient.register(email, password, uniqueName("test-task"));
         expect(reg.status).toBe(201);
 
         const loginResults = await authClient.login(email, password);
@@ -201,31 +202,7 @@ test.describe("Tasks - CRUD Operations", () => {
         expect(successResult.data.assignee_id).toBe(assignee2.userId);
     });
 
-    test("assignee cannot update status of a task they are not assigned to", async ({
-                                                                                        authClient,
-                                                                                        taskClient,
-                                                                                    }) => {
-        const reporter = await loginTestUser(authClient, "reporter");
-        const assignee2 = await loginTestUser(authClient, "assignee2");
 
-        const reporterTasks = await taskClient.listAsReporter(reporter.token);
-        expect(reporterTasks.status).toBe(200);
-        expect(reporterTasks.data.tasks.length).toBeGreaterThan(0);
-
-        // pick a task where assignee != assignee2.userId
-        const foreignTask = reporterTasks.data.tasks.find(
-            (t) => t.assignee_id !== assignee2.userId
-        );
-        expect(foreignTask, "Need a task not assigned to assignee2").toBeTruthy();
-
-        const result = await taskClient.updateStatus(
-            assignee2.token,
-            foreignTask!.id,
-            "done"
-        );
-
-        expect(result.status).toBe(403);
-    });
 
     test("reporter cannot update task status (only assignee can)", async ({
                                                                               authClient,
@@ -272,6 +249,73 @@ test.describe("Tasks - CRUD Operations", () => {
         // if you wired a specific error code/message:
         // expect(result.error?.code).toBe("BAD_REQUEST");
         // expect(result.error?.message).toBe("invalid task status");
+    });
+    test("non-member cannot create task in a team", async ({ authClient, taskClient, teamClient }) => {
+        const manager = await loginTestUser(authClient, "taskManager");
+        const teamRes = await teamClient.create(manager.token, {
+            name: uniqueTeamName("NO-MEMBER-CREATE"),
+        });
+        const team = teamRes.data;
+
+        // outsider not added to this team
+        const outsider = await loginTestUser(authClient, "outsider");
+
+        const res = await taskClient.create(outsider.token, {
+            team_id: team.id,
+            title: uniqueTaskTitle("should-fail"),
+            due_at: currentISODate(Date.now(), 3),
+        });
+
+        expect(res.status).toBe(403);
+    });
+
+    test("assignee cannot update status of a task they are not assigned to", async ({
+                                                                                        authClient,
+                                                                                        taskClient,
+                                                                                        teamClient,
+                                                                                    }) => {
+        // 1) manager creates a team
+        const manager = await loginTestUser(authClient, "taskManager");
+        const teamRes = await teamClient.create(manager.token, {
+            name: uniqueTeamName("STATUS-NOT-ASSIGNEE"),
+        });
+        expect(teamRes.status).toBe(201);
+        const team = teamRes.data;
+
+        // 2) login seeded users
+        const reporter  = await loginTestUser(authClient, "reporter");
+        const assignee1 = await loginTestUser(authClient, "assignee1");
+        const assignee2 = await loginTestUser(authClient, "assignee2");
+
+        // 3) manager adds them as team members
+        for (const u of [reporter, assignee1, assignee2]) {
+            const addRes = await teamClient.addMember(
+                manager.token,
+                team.id,
+                u.userId,
+                "member",
+            );
+            expect(addRes.status).toBe(200);
+        }
+
+        // 4) reporter creates a task assigned to assignee1
+        const createRes = await taskClient.create(reporter.token, {
+            team_id: team.id,
+            title: uniqueTaskTitle("not-for-assignee2"),
+            assignee_id: assignee1.userId,
+            due_at: currentISODate(Date.now(), 2),
+        });
+        expect(createRes.status).toBe(201);
+        const taskId = createRes.data.id;
+
+        // 5) assignee2 tries to update status → should be forbidden
+        const result = await taskClient.updateStatus(
+            assignee2.token,
+            taskId,
+            "done",
+        );
+
+        expect(result.status).toBe(403);
     });
 
 });

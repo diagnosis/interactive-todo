@@ -8,11 +8,12 @@ const uniqueEmail = (prefix: string) =>
 
 const uniqueTeamName = (prefix: string) =>
     `${prefix}-team-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+const uniqueName = (prefix: string) => `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`
 
 async function registerAndLogin(authClient: AuthClient) {
     const email = uniqueEmail("teamuser");
     const password = process.env.COMMON_PASS!;
-    const register = await authClient.register(email, password);
+    const register = await authClient.register(email, password, uniqueName("team-member"));
     expect(register.status).toBe(201);
 
     const login = await authClient.login(email, password);
@@ -25,6 +26,27 @@ async function registerAndLogin(authClient: AuthClient) {
         userId: login.data.user.id,
     };
 }
+test("team member can see team in /teams/mine", async ({ authClient, teamClient }) => {
+    const manager = await loginTestUser(authClient, "taskManager");
+    const teamRes = await teamClient.create(manager.token, {
+        name: uniqueTeamName("MEMBER-MINE"),
+    });
+    const team = teamRes.data;
+
+    const member = await registerAndLogin(authClient);
+
+    const addRes = await teamClient.addMember(
+        manager.token,
+        team.id,
+        member.userId,
+        "member",
+    );
+    expect(addRes.status).toBe(200);
+
+    const mine = await teamClient.listMine(member.token);
+    expect(mine.status).toBe(200);
+    expect(mine.data.teams.map(t => t.id)).toContain(team.id);
+});
 
 test.describe("Teams - Management", () => {
     test("task manager can create a team and see it in /teams/mine", async ({

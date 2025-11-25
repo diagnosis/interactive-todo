@@ -14,8 +14,8 @@ export class AuthClient {
         return this.api.post("auth/login", { email, password})
     }
 
-    async register(email: string, password: string):Promise<ApiResponse<RegisterResponse>>{
-        return this.api.post("auth/register", {email, password})
+    async register(email: string, password: string, display_name:string):Promise<ApiResponse<RegisterResponse>>{
+        return this.api.post("auth/register", {email, password, display_name})
     }
     async logout():Promise<ApiResponse<void>>{
         return this.api.post<void>("/auth/logout")
