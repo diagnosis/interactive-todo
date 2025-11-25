@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -728,7 +729,7 @@ func setRefreshTokenCookie(w http.ResponseWriter, refreshToken string) {
 		Value:    refreshToken,
 		Path:     "/",
 		HttpOnly: true,
-		Secure:   false, // set to true in production with HTTPS
+		Secure:   os.Getenv("APP_ENV") == "PROD", // set to true in production with HTTPS
 		SameSite: http.SameSiteLaxMode,
 		MaxAge:   int((7 * 24 * time.Hour).Seconds()),
 	})
@@ -740,7 +741,7 @@ func cleanRefreshToken(w http.ResponseWriter) {
 		Value:    "",
 		Path:     "/",
 		HttpOnly: true,
-		Secure:   false,
+		Secure:   os.Getenv("APP_ENV") == "PROD",
 		SameSite: http.SameSiteLaxMode,
 		MaxAge:   -1,
 	})

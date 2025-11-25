@@ -1,0 +1,41 @@
+name: Deploy to Production
+
+on:
+  workflow_run:
+    workflows: ["API Tests"]
+    types:
+      - completed
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+
+    steps:
+      - name: 🚀 Deploy to Production Server
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            echo "📥 Pulling latest code..."
+            cd ~/interactive-todo
+            git pull origin main
+            
+            echo "🎨 Building frontend..."
+            cd frontend
+            npm install
+            npm run build
+            
+            echo "⚙️  Building backend..."
+            cd ../backend
+            go build -o taskflow-api ./cmd/api
+            
+            echo "🔄 Restarting service..."
+            sudo systemctl restart taskflow
+            
+            echo "✅ Deployment complete!"
+            echo "🌐 Live at: https://interactive-todo.safadev.app"
