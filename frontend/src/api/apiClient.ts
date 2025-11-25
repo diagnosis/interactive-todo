@@ -1,8 +1,9 @@
 import type {ApiError, ApiResponse} from "../types/auth.ts";
 import axios, {type AxiosResponse} from "axios";
 
+const BASE_URL = import.meta.env.PROD ? '/api' : 'http://localhost:8080';
 const apiClient = axios.create({
-  baseURL: 'http://localhost:8080',
+  baseURL: BASE_URL,
   timeout: 10000,
   headers: {
     'Content-Type': 'application/json',
