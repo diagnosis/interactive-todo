@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/google/uuid"
@@ -24,20 +25,78 @@ type User struct {
 	Email        string    `json:"email"`
 	PasswordHash string    `json:"-"`
 	UserType     UserType  `json:"user_type"`
+	DisplayName  *string   `json:"display_name"`
 	CreatedAt    time.Time `json:"created_at"`
 	UpdatedAt    time.Time `json:"updated_at"`
 }
 
+type ProfileUpdate struct {
+	DisplayName *string
+	// later other options can be added.
+}
+
 type UserStore interface {
-	Create(ctx context.Context, email string, password string, userType UserType, now time.Time) (*User, error)
+	Create(ctx context.Context, email string, password string, userType UserType, displayName *string, now time.Time) (*User, error)
 	GetUserByID(ctx context.Context, id uuid.UUID) (*User, error)
 	GetUserByEmail(ctx context.Context, email string) (*User, error)
 	UpdatePassword(ctx context.Context, id uuid.UUID, newPassword string, now time.Time) error
 	ListAll(ctx context.Context) ([]User, error)
 	UpdateUserType(ctx context.Context, userID uuid.UUID, userType UserType) (*User, error)
+	Search(ctx context.Context, q string, limit int) ([]User, error)
+	UpdateProfile(ctx context.Context, userId uuid.UUID, upd ProfileUpdate, now time.Time) (*User, error) //i wanna add this but there some partially methods
 }
 type PGUserStore struct {
 	Pool *pgxpool.Pool
+}
+
+var (
+	ErrInvalidInput = errors.New("invalid input value")
+)
+
+func (s *PGUserStore) UpdateProfile(
+	ctx context.Context,
+	userID uuid.UUID,
+	upd ProfileUpdate,
+	now time.Time,
+) (*User, error) {
+	if userID == uuid.Nil {
+		return nil, fmt.Errorf("update profile: %w: userID is nil", ErrInvalidInput)
+	}
+
+	// If nothing to update, just return the existing user
+	if upd.DisplayName == nil {
+		return s.GetUserByID(ctx, userID)
+	}
+
+	const q = `
+		UPDATE users
+		SET display_name = COALESCE($2, display_name),
+		    updated_at   = $3
+		WHERE id = $1
+		RETURNING id, email, password_hash, user_type, display_name, created_at, updated_at
+	`
+
+	var u User
+	if err := s.Pool.QueryRow(ctx, q,
+		userID,
+		upd.DisplayName,
+		now.UTC(),
+	).Scan(
+		&u.ID,
+		&u.Email,
+		&u.PasswordHash,
+		&u.UserType,
+		&u.DisplayName,
+		&u.CreatedAt,
+		&u.UpdatedAt,
+	); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrNotFound
+		}
+		return nil, fmt.Errorf("update profile: %w", err)
+	}
+
+	return &u, nil
 }
 
 func NewPGUserStore(pool *pgxpool.Pool) *PGUserStore {
@@ -48,6 +107,44 @@ var (
 	ErrDuplicatedEmail = errors.New("email already exists")
 	ErrNotFound        = errors.New("not found")
 )
+
+func (s *PGUserStore) Search(ctx context.Context, q string, limit int) ([]User, error) {
+	if limit <= 0 {
+		limit = 10
+	}
+
+	const query = `
+        SELECT id, email, password_hash, user_type, display_name, created_at, updated_at
+        FROM users
+        WHERE email ILIKE '%' || $1 || '%'
+           OR display_name ILIKE '%' || $1 || '%'
+        ORDER BY email
+        LIMIT $2;
+    `
+	rows, err := s.Pool.Query(ctx, query, q, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var users []User
+	for rows.Next() {
+		var u User
+		if err := rows.Scan(
+			&u.ID,
+			&u.Email,
+			&u.PasswordHash,
+			&u.UserType,
+			&u.DisplayName,
+			&u.CreatedAt,
+			&u.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		users = append(users, u)
+	}
+	return users, rows.Err()
+}
 
 func (s *PGUserStore) UpdateUserType(ctx context.Context, userID uuid.UUID, userType UserType) (*User, error) {
 	const q = `
@@ -71,18 +168,19 @@ func (s *PGUserStore) UpdateUserType(ctx context.Context, userID uuid.UUID, user
 	return &out, nil
 }
 
-func (s *PGUserStore) Create(ctx context.Context, email, hashedPassword string, userType UserType, now time.Time) (*User, error) {
+func (s *PGUserStore) Create(ctx context.Context, email, hashedPassword string, userType UserType, displayName *string, now time.Time) (*User, error) {
 	//generate passwordHash
 
-	q := `INSERT INTO users (email, password_hash, user_type, created_at, updated_at) 
-VALUES ($1,$2,$3,$4,$4) RETURNING id;`
+	q := `INSERT INTO users (email, password_hash, user_type, display_name, created_at, updated_at) 
+VALUES ($1,$2,$3,$4,$5,$5) RETURNING id;`
 	var out User
 	out.PasswordHash = hashedPassword
 	out.CreatedAt = now.UTC()
 	out.UpdatedAt = now.UTC()
 	out.UserType = userType
+	out.DisplayName = displayName
 	out.Email = email
-	if err := s.Pool.QueryRow(ctx, q, email, hashedPassword, userType, now.UTC()).
+	if err := s.Pool.QueryRow(ctx, q, email, hashedPassword, userType, displayName, now.UTC()).
 		Scan(&out.ID); err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
@@ -94,11 +192,11 @@ VALUES ($1,$2,$3,$4,$4) RETURNING id;`
 }
 
 func (s *PGUserStore) GetUserByID(ctx context.Context, id uuid.UUID) (*User, error) {
-	q := `Select id, email, password_hash, user_type, created_at, updated_at
+	q := `Select id, email, password_hash, user_type, display_name, created_at, updated_at
 FROM users WHERE id = $1;`
 	var u User
 	if err := s.Pool.QueryRow(ctx, q, id).
-		Scan(&u.ID, &u.Email, &u.PasswordHash, &u.UserType, &u.CreatedAt, &u.UpdatedAt); err != nil {
+		Scan(&u.ID, &u.Email, &u.PasswordHash, &u.UserType, &u.DisplayName, &u.CreatedAt, &u.UpdatedAt); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrNotFound
 		}
@@ -107,11 +205,11 @@ FROM users WHERE id = $1;`
 	return &u, nil
 }
 func (s *PGUserStore) GetUserByEmail(ctx context.Context, email string) (*User, error) {
-	q := `Select id, email, password_hash, user_type, created_at, updated_at
+	q := `Select id, email, password_hash, user_type, display_name, created_at, updated_at
 FROM users WHERE email = $1;`
 	var u User
 	if err := s.Pool.QueryRow(ctx, q, email).
-		Scan(&u.ID, &u.Email, &u.PasswordHash, &u.UserType, &u.CreatedAt, &u.UpdatedAt); err != nil {
+		Scan(&u.ID, &u.Email, &u.PasswordHash, &u.UserType, &u.DisplayName, &u.CreatedAt, &u.UpdatedAt); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrNotFound
 		}
@@ -132,7 +230,7 @@ func (s *PGUserStore) UpdatePassword(ctx context.Context, id uuid.UUID, newHashe
 	return nil
 }
 func (s *PGUserStore) ListAll(ctx context.Context) ([]User, error) {
-	q := `SELECT id, email, password_hash, user_type, created_at, updated_at
+	q := `SELECT id, email, password_hash, user_type,display_name , created_at, updated_at
 			FROM users ORDER BY email`
 	rows, err := s.Pool.Query(ctx, q)
 	if err != nil {
@@ -148,6 +246,7 @@ func (s *PGUserStore) ListAll(ctx context.Context) ([]User, error) {
 			&user.Email,
 			&user.PasswordHash,
 			&user.UserType,
+			&user.DisplayName,
 			&user.CreatedAt,
 			&user.UpdatedAt,
 		)

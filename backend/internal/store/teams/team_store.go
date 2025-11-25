@@ -29,10 +29,12 @@ type Team struct {
 }
 
 type TeamMember struct {
-	TeamID    uuid.UUID `json:"team_id"`
-	UserID    uuid.UUID `json:"user_id"`
-	Role      TeamRole  `json:"role"`
-	CreatedAt time.Time `json:"created_at"`
+	TeamID      uuid.UUID `json:"team_id"`
+	UserID      uuid.UUID `json:"user_id"`
+	Email       string    `json:"email"`
+	DisplayName *string   `json:"display_name"`
+	Role        TeamRole  `json:"role"`
+	CreatedAt   time.Time `json:"created_at"`
 }
 
 var (
@@ -109,9 +111,10 @@ func (s *PGTeamStore) ListTeamsForUser(ctx context.Context, userID uuid.UUID) ([
 
 func (s *PGTeamStore) ListMembersInTeam(ctx context.Context, teamID uuid.UUID) ([]TeamMember, error) {
 	const q = `
-		SELECT team_id, user_id, role, created_at
-		FROM team_members
-		WHERE team_id = $1;
+		SELECT m.team_id, m.user_id, u.email, u.display_name, m.role, m.created_at
+		FROM team_members m 
+		JOIN users u ON u.id = m.user_id
+		WHERE m.team_id = $1;
 	`
 
 	rows, err := s.pool.Query(ctx, q, teamID)
@@ -123,7 +126,7 @@ func (s *PGTeamStore) ListMembersInTeam(ctx context.Context, teamID uuid.UUID) (
 	var members []TeamMember
 	for rows.Next() {
 		var member TeamMember
-		if err := rows.Scan(&member.TeamID, &member.UserID, &member.Role, &member.CreatedAt); err != nil {
+		if err := rows.Scan(&member.TeamID, &member.UserID, &member.Email, &member.DisplayName, &member.Role, &member.CreatedAt); err != nil {
 			return nil, fmt.Errorf("ListMembersInTeam: scan row for team_id=%s: %w", teamID, err)
 		}
 		members = append(members, member)

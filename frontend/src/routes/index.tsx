@@ -1,17 +1,64 @@
-import { createFileRoute, Navigate } from '@tanstack/react-router'
+import { createFileRoute, redirect } from '@tanstack/react-router'
+import { useQuery } from "@tanstack/react-query"
+import { teamClient } from "../api/teamClient"
+import { Sidebar } from "../features/teams/components/Sidebar"
+import { useState } from "react"
+import { TeamTasks } from "../features/tasks/components/TeamTasks"
 
 export const Route = createFileRoute('/')({
-  component: IndexPage,
+  beforeLoad: async () => {
+    const token = localStorage.getItem('access_token')
+    if (token) return
+
+    try {
+      const res = await fetch('http://localhost:8080/auth/refresh', {
+        method: 'POST',
+        credentials: 'include',
+      })
+      if (!res.ok) throw new Error()
+
+      const body = await res.json()
+      const payload = body.data ?? body
+
+      const access = payload.access_token
+      const user = payload.user
+
+      if (access) {
+        localStorage.setItem('access_token', access)
+      }
+      if (user) {
+        localStorage.setItem('current_user', JSON.stringify(user))
+      }
+
+      return
+    } catch {
+      throw redirect({ to: '/login' })
+    }
+  },
+  component: DashboardPage,
 })
 
-function IndexPage() {
-  // Check if user is logged in
-  const isLoggedIn = !!localStorage.getItem('access_token')
+function DashboardPage() {
+  const [selectedTeamId, setSelectedTeamId] = useState<string | null>(null)
 
-  // Redirect based on auth status
-  if (isLoggedIn) {
-    return <Navigate to="/dashboard" />
-  }
+  const { data } = useQuery({
+    queryKey: ['teams'],
+    queryFn: teamClient.listTeamsForUser,
+  })
 
-  return <Navigate to="/login" />
+  const teams = data?.data?.teams ?? []
+  const useDropdown = teams.length > 5
+
+  return (
+    <div className="flex h-full min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
+      <Sidebar
+        teams={teams}
+        useDropdown={useDropdown}
+        selectedTeamId={selectedTeamId}
+        setSelectedTeamId={setSelectedTeamId}
+      />
+
+      <TeamTasks teamId={selectedTeamId} />
+    </div>
+  )
 }
