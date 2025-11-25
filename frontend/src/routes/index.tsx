@@ -1,9 +1,11 @@
+// src/routes/index.tsx
 import { createFileRoute, redirect } from '@tanstack/react-router'
 import { useQuery } from "@tanstack/react-query"
 import { teamClient } from "../api/teamClient"
 import { Sidebar } from "../features/teams/components/Sidebar"
 import { useState } from "react"
 import { TeamTasks } from "../features/tasks/components/TeamTasks"
+import { API_BASE_URL } from "../api/apiClient"   // 👈 import this
 
 export const Route = createFileRoute('/')({
   beforeLoad: async () => {
@@ -11,7 +13,7 @@ export const Route = createFileRoute('/')({
     if (token) return
 
     try {
-      const res = await fetch('http://localhost:8080/auth/refresh', {
+      const res = await fetch(`${API_BASE_URL}/auth/refresh`, {
         method: 'POST',
         credentials: 'include',
       })
@@ -50,15 +52,15 @@ function DashboardPage() {
   const useDropdown = teams.length > 5
 
   return (
-    <div className="flex h-full min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
-      <Sidebar
-        teams={teams}
-        useDropdown={useDropdown}
-        selectedTeamId={selectedTeamId}
-        setSelectedTeamId={setSelectedTeamId}
-      />
+      <div className="flex h-full min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
+        <Sidebar
+            teams={teams}
+            useDropdown={useDropdown}
+            selectedTeamId={selectedTeamId}
+            setSelectedTeamId={setSelectedTeamId}
+        />
 
-      <TeamTasks teamId={selectedTeamId} />
-    </div>
+        <TeamTasks teamId={selectedTeamId} />
+      </div>
   )
 }

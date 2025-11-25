@@ -1,26 +1,30 @@
-import type {ApiError, ApiResponse} from "../types/auth.ts";
-import axios, {type AxiosResponse} from "axios";
+// src/api/apiClient.ts
+import type { ApiError, ApiResponse } from "../types/auth.ts";
+import axios, { type AxiosResponse } from "axios";
 
-const BASE_URL = import.meta.env.PROD ? '/api' : 'http://localhost:8080';
+export const API_BASE_URL =
+    import.meta.env.PROD ? "/api" : "http://localhost:8080";
+
 const apiClient = axios.create({
-  baseURL: BASE_URL,
-  timeout: 10000,
-  headers: {
-    'Content-Type': 'application/json',
-  },
+    baseURL: API_BASE_URL,
+    timeout: 10000,
+    headers: {
+        "Content-Type": "application/json",
+    },
     withCredentials: true,
 });
+
 apiClient.interceptors.request.use(
     (config) => {
-        const accessToken = localStorage.getItem('access_token');
-        if (accessToken){
-            config.headers['Authorization'] = `Bearer ${accessToken}`;
+        const accessToken = localStorage.getItem("access_token");
+        if (accessToken) {
+            config.headers["Authorization"] = `Bearer ${accessToken}`;
         }
         return config;
-
     },
-    (error) => Promise.reject(error)
-)
+    (error) => Promise.reject(error),
+);
+
 let isRefreshing = false;
 
 apiClient.interceptors.response.use(
@@ -28,23 +32,20 @@ apiClient.interceptors.response.use(
     async (error) => {
         const originalRequest = error.config;
 
-        // not a 401 → just fail
         if (error.response?.status !== 401) {
             return Promise.reject(error);
         }
 
-        // prevent infinite loop
         if ((originalRequest as any)._retry) {
             return Promise.reject(error);
         }
         (originalRequest as any)._retry = true;
 
         const url: string = originalRequest?.url || "";
-        // don't try refresh for auth endpoints
         if (
             url.includes("/auth/login") ||
             url.includes("/auth/register") ||
-            url.includes("/auth/refresh") // ✅ fixed
+            url.includes("/auth/refresh")
         ) {
             return Promise.reject(error);
         }
@@ -57,7 +58,7 @@ apiClient.interceptors.response.use(
 
         try {
             const refreshRes = await axios.post(
-                "http://localhost:8080/auth/refresh",
+                `${API_BASE_URL}/auth/refresh`,
                 {},
                 { withCredentials: true },
             );
@@ -74,8 +75,8 @@ apiClient.interceptors.response.use(
             return apiClient(originalRequest);
         } catch (refreshErr) {
             localStorage.removeItem("access_token");
-            localStorage.removeItem("current_user"); // ✅ clear user too
-            window.location.href = "/login";         // ✅ correct path
+            localStorage.removeItem("current_user");
+            window.location.href = "/login";
             return Promise.reject(refreshErr);
         } finally {
             isRefreshing = false;
@@ -88,8 +89,6 @@ export async function handle<T>(
 ): Promise<ApiResponse<T>> {
     try {
         const res = await promise;
-
-        // 🔥 flatten: if backend sends { data: {...} } → use inner .data
         const payload = res.data?.data ?? res.data;
 
         return {
@@ -100,7 +99,7 @@ export async function handle<T>(
     } catch (error: any) {
         const status = error.response?.status ?? 500;
         const raw = error.response?.data;
-        const rawError = raw?.error ?? raw
+        const rawError = raw?.error ?? raw;
 
         const apiError: ApiError = {
             code: rawError?.code ?? "UNKNOWN_ERROR",
