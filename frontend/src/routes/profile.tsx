@@ -60,38 +60,56 @@ function ProfilePage() {
     })
     const mustSetName = !user?.display_name
     return (
-        <div className="flex-1 flex justify-center py-8 px-4">
-            <div className="w-full max-w-lg space-y-8">
-                <header>
-                    <h1 className="text-2xl font-semibold text-slate-900">Profile</h1>
-                    <p className="text-sm text-slate-500">
-                        Manage your personal information and password.
+        <div className="flex-1 flex justify-center py-12 px-4 bg-gradient-to-br from-slate-50 to-slate-100 min-h-screen">
+            <div className="w-full max-w-2xl space-y-8">
+                <header className="text-center">
+                    <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-blue-600 to-cyan-600 rounded-2xl mb-4 shadow-lg">
+                        <svg className="w-8 h-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                        </svg>
+                    </div>
+                    <h1 className="text-3xl font-bold text-slate-900 mb-2">Profile Settings</h1>
+                    <p className="text-slate-600">
+                        Manage your personal information and account security
                     </p>
                     {mustSetName && (
-                        <p className="mt-2 rounded-md bg-amber-50 border border-amber-200 px-3 py-2 text-xs text-amber-800">
-                            Please set a display name before continuing.
-                        </p>
+                        <div className="mt-4 inline-block rounded-xl bg-amber-50 border-2 border-amber-200 px-4 py-3 text-sm text-amber-800">
+                            <svg className="w-4 h-4 inline mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                            </svg>
+                            Please set a display name before continuing
+                        </div>
                     )}
                 </header>
 
-                {/* Display name / profile section */}
-                <section className="rounded-2xl bg-white border border-slate-200 p-4 shadow-sm space-y-3">
-                    <h2 className="text-sm font-semibold text-slate-800">Profile info</h2>
+                <section className="rounded-2xl bg-white border-2 border-slate-200 p-6 shadow-xl space-y-5">
+                    <div className="flex items-center gap-3 pb-4 border-b border-slate-200">
+                        <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center">
+                            <svg className="w-5 h-5 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                            </svg>
+                        </div>
+                        <div>
+                            <h2 className="text-lg font-bold text-slate-800">Profile Information</h2>
+                            <p className="text-xs text-slate-500">Update your personal details</p>
+                        </div>
+                    </div>
+
                     {profileErr && (
-                        <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded px-2 py-1">
+                        <div className="rounded-xl bg-red-50 border-2 border-red-200 px-4 py-3 text-sm text-red-700">
                             {profileErr}
-                        </p>
+                        </div>
                     )}
 
                     <form
-                        className="space-y-3"
+                        className="space-y-5"
                         onSubmit={(e) => {
                             e.preventDefault()
                             profileMutation.mutate()
                         }}
                     >
                         <Input
-                            label="Email"
+                            label="Email Address"
                             type="email"
                             value={user?.email ?? ''}
                             onChange={() => {}}
@@ -99,48 +117,57 @@ function ProfilePage() {
                         />
 
                         <Input
-                            label="Display name"
+                            label="Display Name"
                             type="text"
                             value={displayName}
                             onChange={setDisplayName}
                             required
                         />
 
-                        <div className="flex justify-end">
+                        <div className="flex justify-end pt-2">
                             <Button
                                 type="submit"
                                 loading={profileMutation.isPending}
                             >
-                                Save profile
+                                Save Changes
                             </Button>
                         </div>
                     </form>
                 </section>
 
-                {/* Password section */}
-                <section className="rounded-2xl bg-white border border-slate-200 p-4 shadow-sm space-y-3">
-                    <h2 className="text-sm font-semibold text-slate-800">Password</h2>
+                <section className="rounded-2xl bg-white border-2 border-slate-200 p-6 shadow-xl space-y-5">
+                    <div className="flex items-center gap-3 pb-4 border-b border-slate-200">
+                        <div className="w-10 h-10 bg-red-100 rounded-xl flex items-center justify-center">
+                            <svg className="w-5 h-5 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                            </svg>
+                        </div>
+                        <div>
+                            <h2 className="text-lg font-bold text-slate-800">Change Password</h2>
+                            <p className="text-xs text-slate-500">Update your account password</p>
+                        </div>
+                    </div>
 
                     {passwordErr && (
-                        <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded px-2 py-1">
+                        <div className="rounded-xl bg-red-50 border-2 border-red-200 px-4 py-3 text-sm text-red-700">
                             {passwordErr}
-                        </p>
+                        </div>
                     )}
                     {passwordMsg && (
-                        <p className="text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 rounded px-2 py-1">
+                        <div className="rounded-xl bg-emerald-50 border-2 border-emerald-200 px-4 py-3 text-sm text-emerald-700">
                             {passwordMsg}
-                        </p>
+                        </div>
                     )}
 
                     <form
-                        className="space-y-3"
+                        className="space-y-5"
                         onSubmit={(e) => {
                             e.preventDefault()
                             passwordMutation.mutate()
                         }}
                     >
                         <Input
-                            label="Current password"
+                            label="Current Password"
                             type="password"
                             value={currentPassword}
                             onChange={setCurrentPassword}
@@ -148,15 +175,15 @@ function ProfilePage() {
                         />
 
                         <Input
-                            label="New password"
+                            label="New Password"
                             type="password"
                             value={newPassword}
                             onChange={setNewPassword}
                             required
                         />
 
-                        <div className="flex justify-end gap-2">
-                            <button
+                        <div className="flex justify-end gap-3 pt-2">
+                            <Button
                                 type="button"
                                 onClick={() => {
                                     setCurrentPassword('')
@@ -164,30 +191,21 @@ function ProfilePage() {
                                     setPasswordErr(null)
                                     setPasswordMsg(null)
                                 }}
-                                className="rounded-md border border-slate-300 px-3 py-1 text-xs text-slate-700 hover:bg-slate-50"
+                                variant="secondary"
                             >
-                                Reset
-                            </button>
+                                Clear
+                            </Button>
 
                             <Button
                                 type="submit"
                                 loading={passwordMutation.isPending}
                             >
-                                Update password
+                                Update Password
                             </Button>
                         </div>
                     </form>
                 </section>
 
-                <section>
-                    <button
-                        type="button"
-                        onClick={logout}
-                        className="text-xs text-red-600 hover:underline"
-                    >
-                        Log out from this device
-                    </button>
-                </section>
             </div>
         </div>
     )
