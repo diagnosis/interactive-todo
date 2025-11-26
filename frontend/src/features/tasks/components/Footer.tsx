@@ -27,18 +27,9 @@ export function Footer() {
 
                     <span className="hidden sm:inline text-slate-300">|</span>
 
-                    <a
-                        href="https://interactive-todo.safadev.app"
-                        target="_blank"
-                        rel="noreferrer"
-                        className="hover:text-slate-700"
-                    >
-                        Live demo
-                    </a>
-
                     {/* If you add GitHub later, just fill the href */}
                     <a
-                        href="https://github.com/your-user/interactive-todo"
+                        href="https://github.com/diagnosis/interactive-todo"
                         target="_blank"
                         rel="noreferrer"
                         className="hover:text-slate-700"

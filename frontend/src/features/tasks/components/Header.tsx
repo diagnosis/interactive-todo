@@ -1,7 +1,7 @@
 import { Link, useNavigate } from '@tanstack/react-router'
 import { useQueryClient } from '@tanstack/react-query'
-import { useAuth } from '../../context/AuthContext'
-import { Button } from './Button'
+import { useAuth } from '../../../context/AuthContext.tsx'
+import { Button } from '../../../shared/components/Button.tsx'
 
 export function Header() {
     const navigate = useNavigate()

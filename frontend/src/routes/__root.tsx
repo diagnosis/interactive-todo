@@ -1,5 +1,5 @@
 import { createRootRoute, Outlet } from "@tanstack/react-router"
-import { Header } from "../shared/components/Header"
+import { Header } from "../features/tasks/components/Header.tsx"
 import { AuthProvider } from "../context/AuthContext"
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { Footer } from "../features/tasks/components/Footer"
