@@ -52,7 +52,7 @@ function DashboardPage() {
   const useDropdown = teams.length > 5
 
   return (
-      <div className="flex flex-1 h-full min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
+      <div className="flex flex-1">
         <Sidebar
             teams={teams}
             useDropdown={useDropdown}
