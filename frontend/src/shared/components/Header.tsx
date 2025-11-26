@@ -25,7 +25,7 @@ export function Header() {
                     </svg>
                 </div>
                 <div>
-                    <h1 className="text-xl font-bold text-slate-800">TaskFlow</h1>
+                    <h1 className="text-xl font-bold text-slate-800">Interactive Todo</h1>
                     <p className="text-xs text-slate-500">Team Task Manager</p>
                 </div>
             </Link>
